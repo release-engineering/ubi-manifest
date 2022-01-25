@@ -6,9 +6,9 @@ WORKDIR /src
 
 COPY . .
 
-RUN pip install gunicorn
+RUN pip install "uvicorn[standard]" gunicorn
 RUN pip install .
 
 EXPOSE 8000
 
-CMD ["gunicorn", "--config", "/src/conf/gunicorn.conf","-w 4", "ubi_manifest.app.factory:create_app()"]
+CMD ["gunicorn", "--worker-class", "uvicorn.workers.UvicornWorker", "--config", "/src/conf/gunicorn.conf","-w 4", "ubi_manifest.app.factory:create_app()"]

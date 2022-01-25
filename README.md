@@ -10,7 +10,7 @@ TODO - implementation in progress
 Development
 -----------
 Patches may be contributed via pull requests to
-https://github.com/release-engineering/pubtools-pulplib.
+https://github.com/release-engineering/ubi-manifest.
 
 All changes must pass the automated test suite, along with various static
 checks.
@@ -23,16 +23,15 @@ pip install -r requirements-dev.txt
 pre-commit install
 ```
 
- - Setup and run flask app:
+ - Setup and run fastapi app:
  - In py3 virtual env do:
 
 ```
 pip install .
 export CELERY_BROKER=redis://<ip_of_localhost>:6379/0
 export CELERY_RESULT_BACKEND=redis://<ip_of_localhost>:6379/0
-export FLASK_APP=ubi_manifest.app.factory
-export FLASK_ENV=development
-flask run
+
+uvicorn ubi_manifest.app.factory:create_app --factory --reload 
 ```
 
 - Build and run redis in container:
