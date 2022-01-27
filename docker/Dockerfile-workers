@@ -1,0 +1,11 @@
+FROM registry.access.redhat.com/ubi8/python-39
+
+LABEL maintainer="Red Hat - EXD"
+
+WORKDIR /src
+
+COPY . .
+
+RUN pip install .
+
+CMD celery -A ubi_manifest.worker.tasks worker --loglevel=debug
