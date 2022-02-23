@@ -1,17 +1,13 @@
 import pytest
-from pubtools.pulplib import YumRepository, RpmUnit, RpmDependency, ModulemdUnit
-from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import (
-    Depsolver,
-    BATCH_SIZE_RESOLVER,
-)
+from pubtools.pulplib import ModulemdUnit, RpmDependency, RpmUnit
+
 from ubi_manifest.worker.tasks.depsolver.models import UbiRepository
+from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import (
+    BATCH_SIZE_RESOLVER,
+    Depsolver,
+)
 
-
-def get_test_yum_repository(**kwargs):
-    pulp = kwargs.pop("pulp")
-    repo = YumRepository(**kwargs)
-    repo.__dict__["_client"] = pulp.client
-    return repo
+from .utils import create_and_insert_repo
 
 
 def test_what_provides(pulp):
@@ -20,7 +16,7 @@ def test_what_provides(pulp):
 
     requires = ["gcc"]
 
-    repo = get_test_yum_repository(id="test_repo_id", pulp=pulp)
+    repo = create_and_insert_repo(id="test_repo_id", pulp=pulp)
 
     unit_1 = RpmUnit(
         name="test",
@@ -40,7 +36,6 @@ def test_what_provides(pulp):
         provides=[RpmDependency(name="gcc")],
     )
 
-    pulp.insert_repository(repo)
     pulp.insert_units(repo, [unit_1, unit_2])
 
     result = depsolver.what_provides(requires, [repo])
@@ -84,7 +79,7 @@ def test_get_base_packages(pulp):
     """test queries for input packages for given repo"""
     depsolver = Depsolver(None)
 
-    repo = get_test_yum_repository(id="test_repo_id", pulp=pulp)
+    repo = create_and_insert_repo(id="test_repo_id", pulp=pulp)
 
     unit_1 = RpmUnit(
         name="test",
@@ -102,7 +97,6 @@ def test_get_base_packages(pulp):
         arch="x86_64",
     )
 
-    pulp.insert_repository(repo)
     pulp.insert_units(repo, [unit_1, unit_2])
 
     pkgs_to_search = ["test"]
@@ -119,7 +113,7 @@ def test_get_pkgs_from_all_modules(pulp):
     """tests getting pkgs filenames from all available modulemd units"""
     depsolver = Depsolver(None)
 
-    repo = get_test_yum_repository(id="test_repo_1", pulp=pulp)
+    repo = create_and_insert_repo(id="test_repo_1", pulp=pulp)
 
     unit_1 = ModulemdUnit(
         name="test",
@@ -144,7 +138,6 @@ def test_get_pkgs_from_all_modules(pulp):
         ],
     )
 
-    pulp.insert_repository(repo)
     pulp.insert_units(repo, [unit_1, unit_2])
 
     ft = depsolver._get_pkgs_from_all_modules([repo])
@@ -240,9 +233,9 @@ def test_run(pulp):
 
 
 def _prepare_test_data(pulp):
-    repo_1 = get_test_yum_repository(id="test_repo_1", pulp=pulp)
+    repo_1 = create_and_insert_repo(id="test_repo_1", pulp=pulp)
 
-    repo_2 = get_test_yum_repository(id="test_repo_2", pulp=pulp)
+    repo_2 = create_and_insert_repo(id="test_repo_2", pulp=pulp)
 
     unit_1 = RpmUnit(
         name="gcc",
@@ -306,9 +299,6 @@ def _prepare_test_data(pulp):
 
     repo_1_units = [unit_1, unit_2, unit_5]
     repo_2_units = [unit_3, unit_4, unit_6]
-
-    pulp.insert_repository(repo_1)
-    pulp.insert_repository(repo_2)
 
     pulp.insert_units(repo_1, repo_1_units)
     pulp.insert_units(repo_2, repo_2_units)

@@ -1,14 +1,15 @@
-from ubi_manifest.worker.tasks.depsolver.utils import (
-    vercmp_sort,
-    _keep_n_latest_rpms,
-    flatten_list_of_sets,
-    parse_bool_deps,
-    get_n_latest_from_content,
-    create_or_criteria,
-)
-from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
-from pubtools.pulplib import RpmUnit, Criteria
 import pytest
+from pubtools.pulplib import Criteria, RpmUnit
+
+from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
+from ubi_manifest.worker.tasks.depsolver.utils import (
+    _keep_n_latest_rpms,
+    create_or_criteria,
+    flatten_list_of_sets,
+    get_n_latest_from_content,
+    parse_bool_deps,
+    vercmp_sort,
+)
 
 
 def get_ubi_unit(klass, repo_id, **kwargs):
@@ -142,7 +143,7 @@ def test_flatten_list_of_sets():
     set_2 = set([2, 3, 4])
     expected_set = set([1, 2, 3, 4])
 
-    new_set = flatten_list_of_sets([set_1, set_2]).result()
+    new_set = flatten_list_of_sets([set_1, set_2])
     assert new_set == expected_set
 
 

@@ -1,11 +1,10 @@
 import re
-from logging import getLogger
 from collections import defaultdict, deque
 from itertools import chain
+from logging import getLogger
 
 from pubtools.pulplib import Criteria
 from rpm import labelCompare as label_compare  # pylint: disable=no-name-in-module
-from more_executors.futures import f_return
 
 _LOG = getLogger(__name__)
 
@@ -36,7 +35,7 @@ def flatten_list_of_sets(list_of_sets):
     for one_set in list_of_sets:
         out |= one_set
 
-    return f_return(out)
+    return out
 
 
 def get_n_latest_from_content(content, modular_rpms=None):

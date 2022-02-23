@@ -1,21 +1,17 @@
 from attrs import define
-from pubtools.pulplib import Client, YumRepository, RpmUnit, ModulemdUnit
+from pubtools.pulplib import Client, ModulemdUnit, RpmUnit, YumRepository
+
+from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
 from ubi_manifest.worker.tasks.depsolver.pulp_queries import (
-    make_pulp_client,
-    search_rpms,
-    search_modulemds,
-    _search_units_per_repos,
     _search_units,
+    _search_units_per_repos,
+    make_pulp_client,
+    search_modulemds,
+    search_rpms,
 )
 from ubi_manifest.worker.tasks.depsolver.utils import create_or_criteria
-from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
 
-
-def get_test_yum_repository(**kwargs):
-    pulp = kwargs.pop("pulp")
-    repo = YumRepository(**kwargs)
-    repo.__dict__["_client"] = pulp.client
-    return repo
+from .utils import create_and_insert_repo
 
 
 @define
@@ -42,10 +38,7 @@ def test_make_pulp_client():
 
 def test_search_rpms(pulp):
     """Test method for searching rpms"""
-    repo = get_test_yum_repository(
-        id="test_repo_1",
-        pulp=pulp,
-    )
+    repo = create_and_insert_repo(id="test_repo_1", pulp=pulp)
 
     unit_1 = RpmUnit(
         name="test",
@@ -58,7 +51,6 @@ def test_search_rpms(pulp):
         name="test", version="1.0", release="1", arch="i386", filename="test.i386.rpm"
     )
 
-    pulp.insert_repository(repo)
     pulp.insert_units(repo, [unit_1, unit_2])
 
     criteria = create_or_criteria(["filename"], [("test.x86_64.rpm",)])
@@ -75,7 +67,7 @@ def test_search_rpms(pulp):
 
 def test_search_modulemds(pulp):
     """Test convenient method for searching modulemds"""
-    repo = get_test_yum_repository(
+    repo = create_and_insert_repo(
         id="test_repo_1",
         pulp=pulp,
     )
@@ -94,7 +86,6 @@ def test_search_modulemds(pulp):
         arch="x86_64",
     )
 
-    pulp.insert_repository(repo)
     pulp.insert_units(repo, [unit_1, unit_2])
 
     criteria = create_or_criteria(["name", "stream"], [("test", "10")])
@@ -111,17 +102,15 @@ def test_search_modulemds(pulp):
 
 def test_search_units_per_repos(pulp):
     """Test searching over multiple repositories"""
-    repo_1 = get_test_yum_repository(
+    repo_1 = create_and_insert_repo(
         id="test_repo_1",
         pulp=pulp,
     )
-    repo_2 = get_test_yum_repository(id="test_repo_2", pulp=pulp)
+    repo_2 = create_and_insert_repo(id="test_repo_2", pulp=pulp)
 
     unit_1 = RpmUnit(name="test", version="1.0", release="1", arch="x86_64")
     unit_2 = RpmUnit(name="test", version="1.0", release="1", arch="i386")
 
-    pulp.insert_repository(repo_1)
-    pulp.insert_repository(repo_2)
     pulp.insert_units(repo_1, [unit_1])
     pulp.insert_units(repo_2, [unit_2])
 
@@ -151,10 +140,10 @@ def test_search_units_per_repos(pulp):
 
 def test_search_units(pulp):
     """Test simple search for units"""
-    repo = get_test_yum_repository(id="test_repo", pulp=pulp)
+    repo = create_and_insert_repo(id="test_repo", pulp=pulp)
     unit_1 = RpmUnit(name="test", version="1.0", release="1", arch="x86_64")
     unit_2 = RpmUnit(name="test", version="1.0", release="1", arch="i386")
-    pulp.insert_repository(repo)
+
     pulp.insert_units(repo, [unit_1, unit_2])
 
     criteria = create_or_criteria(["name", "arch"], [("test", "x86_64")])
@@ -178,7 +167,7 @@ def test_search_units(pulp):
 
 def test_search_units_handle_pages(pulp):
     """test proper handling of pagination"""
-    repo = get_test_yum_repository(id="test_repo", pulp=pulp)
+    repo = create_and_insert_repo(id="test_repo", pulp=pulp)
 
     units = []
     # let's use higher number of units, we don't want to rely
@@ -187,7 +176,6 @@ def test_search_units_handle_pages(pulp):
         unit = RpmUnit(name="test", version=str(num), release="1", arch="x86_64")
         units.append(unit)
 
-    pulp.insert_repository(repo)
     pulp.insert_units(repo, units)
 
     criteria = create_or_criteria(["name"], [("test",)])
@@ -201,12 +189,11 @@ def test_search_units_handle_pages(pulp):
 
 def test_search_units_batch_split(pulp):
     """test proper handling of queries split into batches"""
-    repo = get_test_yum_repository(id="test_repo", pulp=pulp)
+    repo = create_and_insert_repo(id="test_repo", pulp=pulp)
     unit_1 = RpmUnit(name="test-1", version="1.0", release="1", arch="x86_64")
     unit_2 = RpmUnit(name="test-2", version="1.0", release="1", arch="i386")
     unit_3 = RpmUnit(name="test-3", version="1.0", release="1", arch="s390x")
 
-    pulp.insert_repository(repo)
     pulp.insert_units(repo, [unit_1, unit_2, unit_3])
 
     criteria = create_or_criteria(["name"], [("test-1",), ("test-2",), ("test-3",)])

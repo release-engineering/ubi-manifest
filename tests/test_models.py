@@ -1,5 +1,6 @@
-from pubtools.pulplib import RpmUnit
 import pytest
+from pubtools.pulplib import RpmUnit
+
 from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
 
 

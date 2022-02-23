@@ -1,10 +1,12 @@
 import os
-from pubtools.pulplib import Client, Criteria, RpmUnit, ModulemdUnit
-from more_executors.futures import f_flat_map, f_return, f_sequence, f_proxy
+
+from more_executors.futures import f_flat_map, f_map, f_proxy, f_return, f_sequence
+from pubtools.pulplib import Client, Criteria, ModulemdUnit, RpmUnit
+
 from .models import UbiUnit
 from .utils import flatten_list_of_sets
 
-BATCH_SIZE = int(os.getenv("UBIMANIFEST_BATCH_SIZE", "250"))
+BATCH_SIZE = int(os.getenv("UBI_MANIFEST_BATCH_SIZE", "250"))
 
 
 def make_pulp_client(config):
@@ -48,7 +50,7 @@ def _search_units(repo, criteria_list, content_type_cls, batch_size_override=Non
 
         fts.append(handled_f)
 
-    return f_flat_map(f_sequence(fts), flatten_list_of_sets)
+    return f_map(f_sequence(fts), flatten_list_of_sets)
 
 
 def _search_units_per_repos(
@@ -65,7 +67,7 @@ def _search_units_per_repos(
             )
         )
 
-    return f_proxy(f_flat_map(f_sequence(units), flatten_list_of_sets))
+    return f_proxy(f_map(f_sequence(units), flatten_list_of_sets))
 
 
 def search_modulemds(or_criteria, repos, batch_size_override=None):

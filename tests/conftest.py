@@ -1,8 +1,8 @@
 import pytest
-
-from ubi_manifest.app.factory import create_app
 from fastapi.testclient import TestClient
 from pubtools.pulplib import FakeController
+
+from ubi_manifest.app.factory import create_app
 
 
 @pytest.fixture

@@ -1,9 +1,11 @@
-import os
 import logging
+import os
 from concurrent.futures import as_completed
-from pubtools.pulplib import Criteria
-from more_executors.futures import f_proxy
+
 from more_executors import Executors
+from more_executors.futures import f_proxy
+from pubtools.pulplib import Criteria
+
 from .pulp_queries import search_modulemds, search_rpms
 from .utils import create_or_criteria, get_n_latest_from_content, parse_bool_deps
 
