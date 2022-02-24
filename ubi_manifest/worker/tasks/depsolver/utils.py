@@ -57,10 +57,10 @@ def get_n_latest_from_content(content, modular_rpms=None):
     return out
 
 
-def parse_bool_deps(bool_dependecy):
+def parse_bool_deps(bool_dependency):
     """Parses bool/rich dependency clause and returns set of names of packages"""
     # remove all paranthesis from clause
-    _dep = re.sub(r"\(|\)", "", bool_dependecy)
+    _dep = re.sub(r"\(|\)", "", bool_dependency)
     to_parse = _dep.split()
 
     operators = set(
