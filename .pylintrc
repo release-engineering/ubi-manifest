@@ -79,3 +79,8 @@ disable=print-statement,
         deprecated-sys-function,
         exception-escape,
         comprehension-escape,
+        # end of default config
+        fixme,
+        too-few-public-methods,
+        invalid-name,
+        
