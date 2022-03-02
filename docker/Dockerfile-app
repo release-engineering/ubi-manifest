@@ -4,11 +4,24 @@ LABEL maintainer="Red Hat - EXD"
 
 WORKDIR /src
 
+# Switch to priviledged user to install rpm-devel
+USER 0
+
+# Enable CentOS repos, as rpm-devel is not in RHEL repos
+COPY ./docker/rpm-config/CentOS-Stream-rhsrvany.repo /etc/yum.repos.d/
+COPY ./docker/rpm-config/RPM-GPG-KEY-centosofficial /etc/pki/rpm-gpg/
+
+RUN yum repolist
+RUN yum install -y --disableplugin=subscription-manager rpm-devel
+
+# Switch back to unpriviledged user
+USER 1001
+
 COPY . .
 
-RUN pip install "uvicorn[standard]" gunicorn
-RUN pip install .
+RUN pip3 install "uvicorn[standard]" gunicorn
+RUN pip3 install .
 
 EXPOSE 8000
 
-CMD ["gunicorn", "--worker-class", "uvicorn.workers.UvicornWorker", "--config", "/src/conf/gunicorn.conf","-w 4", "ubi_manifest.app.factory:create_app()"]
+CMD ["gunicorn", "--worker-class", "uvicorn.workers.UvicornWorker", "-w 4", "--config", "/src/conf/gunicorn.conf", "ubi_manifest.app.factory:create_app()"]
