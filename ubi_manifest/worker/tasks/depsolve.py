@@ -34,10 +34,12 @@ def depsolve_task(ubi_repo_ids: List[str]) -> Dict[str, List[UbiUnit]]:
         repos_map = {}
         debuginfo_dep_map = {}
         dep_map = {}
-
+        in_source_rpm_repos = []
         for ubi_repo_id in ubi_repo_ids:
             repo = client.get_repository(ubi_repo_id)
             debuginfo_repo = repo.get_debug_repository()
+            srpm_repo = repo.get_source_repository()
+
             version = repo.ubi_config_version
             # get proper ubi_config for given content_set and version
             config = ubi_config_loader.get_config(repo.content_set, version)
@@ -48,12 +50,17 @@ def depsolve_task(ubi_repo_ids: List[str]) -> Dict[str, List[UbiUnit]]:
                 )
             # create rhel_repo:ubi_repo mapping
             for _repo, sources in zip(
-                [repo, debuginfo_repo],
-                [repo.population_sources, debuginfo_repo.population_sources],
+                [repo, debuginfo_repo, srpm_repo],
+                [
+                    repo.population_sources,
+                    debuginfo_repo.population_sources,
+                    srpm_repo.population_sources,
+                ],
             ):
                 for item in sources:
                     repos_map[item] = _repo.id
 
+            in_source_rpm_repos.extend(_get_population_sources(client, srpm_repo))
             whitelist, debuginfo_whitelist = _filter_whitelist(config)
             blacklist = parse_blacklist_config(config)
 
@@ -63,7 +70,7 @@ def depsolve_task(ubi_repo_ids: List[str]) -> Dict[str, List[UbiUnit]]:
             )
         # run depsolver for binary repos
         _LOG.info("Running depsolver for RPM repos: %s", list(dep_map.keys()))
-        out = _run_depsolver(list(dep_map.values()), repos_map)
+        out = _run_depsolver(list(dep_map.values()), repos_map, in_source_rpm_repos)
 
         # generate missing debuginfo packages
         # TODO this seems to generate too many debuginfo packages - fix after tests with real data
@@ -71,9 +78,10 @@ def depsolve_task(ubi_repo_ids: List[str]) -> Dict[str, List[UbiUnit]]:
             debuginfo_to_add = set()
             for pkg in pkg_list:
                 # inspired with pungi depsolver
-                source_name = split_filename(pkg.sourcerpm)[0]
-                debuginfo_to_add.add(f"{pkg.name}-debuginfo")
-                debuginfo_to_add.add(f"{source_name}-debugsource")
+                if pkg.sourcerpm:
+                    source_name = split_filename(pkg.sourcerpm)[0]
+                    debuginfo_to_add.add(f"{pkg.name}-debuginfo")
+                    debuginfo_to_add.add(f"{source_name}-debugsource")
 
             _id = client.get_repository(ubi_repo_id).get_debug_repository().id
             # update whitelist for given ubi depsolver item
@@ -83,7 +91,9 @@ def depsolve_task(ubi_repo_ids: List[str]) -> Dict[str, List[UbiUnit]]:
         _LOG.info(
             "Running depsolver for DEBUGINFO repos: %s", list(debuginfo_dep_map.keys())
         )
-        debuginfo_out = _run_depsolver(list(debuginfo_dep_map.values()), repos_map)
+        debuginfo_out = _run_depsolver(
+            list(debuginfo_dep_map.values()), repos_map, in_source_rpm_repos
+        )
 
     out.update(debuginfo_out)
     return out
@@ -113,8 +123,8 @@ def _get_population_sources(client, repo):
     return [client.get_repository(repo_id) for repo_id in repo.population_sources]
 
 
-def _run_depsolver(depolver_items, repos_map):
-    with Depsolver(depolver_items) as depsolver:
+def _run_depsolver(depolver_items, repos_map, in_source_rpm_repos):
+    with Depsolver(depolver_items, in_source_rpm_repos) as depsolver:
         depsolver.run()
         exported = depsolver.export()
         out = remap_keys(repos_map, exported)
