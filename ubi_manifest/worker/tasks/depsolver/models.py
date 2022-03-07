@@ -28,6 +28,14 @@ class UbiUnit:
 
 
 @define
+class PackageToExclude:
+    name: str
+    globbing: bool = False
+    arch: str = None
+
+
+@define
 class DepsolverItem:
     whitelist: Set[str]
+    blacklist: List[PackageToExclude]
     in_pulp_repos: List[YumRepository]

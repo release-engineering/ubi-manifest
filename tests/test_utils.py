@@ -1,16 +1,22 @@
+from unittest import mock
+
 import pytest
 from pubtools.pulplib import Criteria, RpmUnit
 
-from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
+from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
+from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
 from ubi_manifest.worker.tasks.depsolver.utils import (
     _keep_n_latest_rpms,
     create_or_criteria,
     flatten_list_of_sets,
     get_n_latest_from_content,
+    parse_blacklist_config,
     parse_bool_deps,
     split_filename,
     vercmp_sort,
 )
+
+from .utils import MockLoader
 
 
 def get_ubi_unit(klass, repo_id, **kwargs):
@@ -182,10 +188,19 @@ def test_get_n_latest_from_content():
         release="20",
         arch="x86_64",
     )
+    unit_5 = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="pkg_exclude_foo",
+        version="10",
+        release="20",
+        arch="x86_64",
+    )
 
-    units = [unit_1, unit_2, unit_3, unit_4]
+    units = [unit_1, unit_2, unit_3, unit_4, unit_5]
+    blacklist = [PackageToExclude("pkg_exclude", True, "x86_64")]
 
-    result = get_n_latest_from_content(units)
+    result = get_n_latest_from_content(units, blacklist)
     result.sort(key=lambda x: x.name)
 
     # there should be only 2 units in the result
@@ -228,7 +243,7 @@ def test_get_n_latest_from_content_skip_modular_rpms():
     modular_rpms = "test-100-20.x86_64.rpm"
     units = [unit_1, unit_2]
 
-    result = get_n_latest_from_content(units, modular_rpms)
+    result = get_n_latest_from_content(units, [], modular_rpms)
     # there should be only one rpm, modular one is skipped
     assert len(result) == 1
 
@@ -342,3 +357,30 @@ def test_split_filename(filename, name, ver, rel, epoch, arch):
     assert result[2] == rel
     assert result[3] == epoch
     assert result[4] == arch
+
+
+def test_parse_blacklist():
+    with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
+        loader = UbiConfigLoader("https://foo.bar.com/some-repo.git")
+        config = loader.get_config("rpm_out", "8")
+
+        parsed = parse_blacklist_config(config)
+
+        assert len(parsed) == 3
+
+        parsed = sorted(parsed, key=lambda x: x.name)
+
+        item = parsed[0]
+        assert item.name == "kernel"
+        assert item.globbing is False
+        assert item.arch is None
+
+        item = parsed[1]
+        assert item.name == "kernel"
+        assert item.globbing is False
+        assert item.arch == "x86_64"
+
+        item = parsed[2]
+        assert item.name == "package-name"
+        assert item.globbing is True
+        assert item.arch is None

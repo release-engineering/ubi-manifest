@@ -7,6 +7,7 @@ from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import Depsolver
 from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
 from ubi_manifest.worker.tasks.depsolver.utils import (
     make_pulp_client,
+    parse_blacklist_config,
     remap_keys,
     split_filename,
 )
@@ -54,10 +55,11 @@ def depsolve_task(ubi_repo_ids: List[str]) -> Dict[str, List[UbiUnit]]:
                     repos_map[item] = _repo.id
 
             whitelist, debuginfo_whitelist = _filter_whitelist(config)
+            blacklist = parse_blacklist_config(config)
 
-            dep_map[repo.id] = _make_depsolver_item(client, repo, whitelist)
+            dep_map[repo.id] = _make_depsolver_item(client, repo, whitelist, blacklist)
             debuginfo_dep_map[debuginfo_repo.id] = _make_depsolver_item(
-                client, debuginfo_repo, debuginfo_whitelist
+                client, debuginfo_repo, debuginfo_whitelist, blacklist
             )
         # run depsolver for binary repos
         _LOG.info("Running depsolver for RPM repos: %s", list(dep_map.keys()))
@@ -102,9 +104,9 @@ def _filter_whitelist(ubi_config):
     return whitelist, debuginfo_whitelist
 
 
-def _make_depsolver_item(client, repo, whitelist):
+def _make_depsolver_item(client, repo, whitelist, blacklist):
     in_pulp_repos = _get_population_sources(client, repo)
-    return DepsolverItem(whitelist, in_pulp_repos)
+    return DepsolverItem(whitelist, blacklist, in_pulp_repos)
 
 
 def _get_population_sources(client, repo):

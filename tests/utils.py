@@ -15,7 +15,7 @@ class MockLoader:
             "modules": {},
             "packages": {
                 "include": ["package-name-.*", "gcc.*", "httpd.src", "pkg-debuginfo.*"],
-                "exclude": ["package-name-.*", "kernel"],
+                "exclude": ["package-name*.*", "kernel", "kernel.x86_64"],
             },
             "content_sets": {
                 "rpm": {"output": "rpm_out", "input": "rpm_in"},
