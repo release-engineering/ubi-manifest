@@ -55,14 +55,13 @@ class Depsolver:
         modules = search_modulemds([Criteria.true()], repos)
         return f_proxy(self._executor.submit(extract_modular_filenames))
 
-    def get_base_packages(self, repos, pkgs_list):
+    def get_base_packages(self, repos, pkgs_list, blacklist):
         crit = create_or_criteria(["name"], [(rpm,) for rpm in pkgs_list])
 
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
-
-        newest_rpms = get_n_latest_from_content(content, self._modular_rpms)
+        newest_rpms = get_n_latest_from_content(content, blacklist, self._modular_rpms)
         return newest_rpms
 
     def extract_and_resolve(self, content):
@@ -94,7 +93,7 @@ class Depsolver:
         # and subtract solved requires
         self._unsolved -= solved
 
-    def what_provides(self, list_of_requires, repos):
+    def what_provides(self, list_of_requires, repos, blacklist):
         """
         Get the latest rpms that provides requirements from list_of_requires in given repos
         """
@@ -105,7 +104,7 @@ class Depsolver:
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
-        newest_rpms = get_n_latest_from_content(content, self._modular_rpms)
+        newest_rpms = get_n_latest_from_content(content, blacklist, self._modular_rpms)
 
         return newest_rpms
 
@@ -125,10 +124,16 @@ class Depsolver:
         # get modular rpms first
         self._modular_rpms = self._get_pkgs_from_all_modules(pulp_repos)
 
+        merged_blacklist = list(
+            chain.from_iterable([repo.blacklist for repo in self.repos])
+        )
         # search for rpms
         content_fts = [
             self._executor.submit(
-                self.get_base_packages, repo.in_pulp_repos, repo.whitelist
+                self.get_base_packages,
+                repo.in_pulp_repos,
+                repo.whitelist,
+                repo.blacklist,
             )
             for repo in self.repos
         ]
@@ -148,8 +153,8 @@ class Depsolver:
             # we'll better do it is smaller batches
             for _ in range(self._batch_size()):
                 batch.append(self._unsolved.pop())
-            # get new content that provides current batch of rqeuires
-            resolved = self.what_provides(batch, pulp_repos)
+            # get new content that provides current batch of requires
+            resolved = self.what_provides(batch, pulp_repos, merged_blacklist)
             # new content needs resolving deps
             to_resolve = set(resolved)
             # add contetnt to the output set
