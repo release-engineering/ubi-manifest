@@ -1,7 +1,7 @@
 import pytest
 from pubtools.pulplib import ModulemdUnit, RpmDependency, RpmUnit
 
-from ubi_manifest.worker.tasks.depsolver.models import UbiRepository
+from ubi_manifest.worker.tasks.depsolver.models import DepsolverItem
 from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import (
     BATCH_SIZE_RESOLVER,
     Depsolver,
@@ -101,7 +101,7 @@ def test_get_base_packages(pulp):
 
     pkgs_to_search = ["test"]
 
-    result = depsolver.get_base_packages(repo, pkgs_to_search)
+    result = depsolver.get_base_packages([repo], pkgs_to_search)
     # there should be only one package in result with the highest version
     assert len(result) == 1
     unit = result[0]
@@ -180,22 +180,18 @@ def test_run(pulp):
     repos, expected_output_set = _prepare_test_data(pulp)
 
     whitelist_1 = ["gcc", "jq"]
-    ubi_repo_1 = UbiRepository(
+    dep_item_1 = DepsolverItem(
         whitelist=whitelist_1,
-        in_pulp_repo=repos[0],
-        out_pulp_repo=None,
-        resolved=None,
+        in_pulp_repos=[repos[0]],
     )
 
     whitelist_2 = ["apr", "babel"]
-    ubi_repo_2 = UbiRepository(
+    dep_item_2 = DepsolverItem(
         whitelist=whitelist_2,
-        in_pulp_repo=repos[1],
-        out_pulp_repo=None,
-        resolved=None,
+        in_pulp_repos=[repos[1]],
     )
 
-    depsolver = Depsolver([ubi_repo_1, ubi_repo_2])
+    depsolver = Depsolver([dep_item_1, dep_item_2])
     depsolver.run()
 
     # check internal state of depsolver object
@@ -254,8 +250,13 @@ def _prepare_test_data(pulp):
         epoch="1",
         arch="x86_64",
         provides=[RpmDependency(name="jq")],
-        requires=[RpmDependency(name="lib.a"), RpmDependency(name="lib.d")],
+        requires=[
+            RpmDependency(name="lib.a"),
+            RpmDependency(name="lib.d"),
+            RpmDependency(name="/some/script"),
+        ],
     )
+    # note: the dependency "/some/script" will be skipped from processing
 
     unit_3 = RpmUnit(
         name="apr",

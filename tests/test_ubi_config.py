@@ -1,11 +1,12 @@
-import ubiconfig
-from mock import patch
+from unittest import mock
 
 from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
 
+from .utils import MockLoader
+
 
 def test_get_config():
-    with patch("ubiconfig.get_loader", return_value=MockLoader()) as mock_loader:
+    with mock.patch("ubiconfig.get_loader", return_value=MockLoader()) as mock_loader:
         loader = UbiConfigLoader("https://foo.bar.com/some-repo.git")
         config = loader.get_config("rpm_out", "8")
 
@@ -32,22 +33,3 @@ def test_get_config():
         # mock_loader ("ubiconfig.get_loader") should be called only once
         # second call of loader.get_config() reads from loader._config_map
         mock_loader.assert_called_once()
-
-
-class MockLoader:
-    def load_all(self):
-        config_raw = {
-            "modules": {},
-            "packages": {
-                "include": ["package-name-.*"],
-                "exclude": ["package-name-.*"],
-                "arches": ["arch"],
-            },
-            "content_sets": {
-                "rpm": {"output": "rpm_out", "input": "rpm_in"},
-                "srpm": {"output": "srpm_out", "input": "srpm_in"},
-                "debuginfo": {"output": "debug_out", "input": "debug_in"},
-            },
-        }
-
-        return [ubiconfig.UbiConfig.load_from_dict(config_raw, "foo", "8")]

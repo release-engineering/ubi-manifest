@@ -5,35 +5,29 @@ from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
 from ubi_manifest.worker.tasks.depsolver.pulp_queries import (
     _search_units,
     _search_units_per_repos,
-    make_pulp_client,
     search_modulemds,
     search_rpms,
 )
-from ubi_manifest.worker.tasks.depsolver.utils import create_or_criteria
+from ubi_manifest.worker.tasks.depsolver.utils import (
+    create_or_criteria,
+    make_pulp_client,
+)
 
 from .utils import create_and_insert_repo
 
 
-@define
-class TestConfig:
-    url: str
-    username: str
-    password: str
-    insecure: bool
-
-
 def test_make_pulp_client():
-    config = TestConfig(
-        url="https://fake.pulp.com",
-        username="test_user",
-        password="test_pass",
-        insecure=True,
-    )
+    config = {
+        "url": "https://fake.pulp.com",
+        "username": "test_user",
+        "password": "test_pass",
+        "insecure": True,
+    }
+    with make_pulp_client(**config) as client:
+        client = make_pulp_client(**config)
 
-    client = make_pulp_client(config)
-
-    # Client instance is prperly created with no errors
-    assert isinstance(client, Client)
+        # Client instance is prperly created with no errors
+        assert isinstance(client, Client)
 
 
 def test_search_rpms(pulp):
