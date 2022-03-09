@@ -1,21 +1,12 @@
 import os
 
 from more_executors.futures import f_flat_map, f_map, f_proxy, f_return, f_sequence
-from pubtools.pulplib import Client, Criteria, ModulemdUnit, RpmUnit
+from pubtools.pulplib import Criteria, ModulemdUnit, RpmUnit
 
 from .models import UbiUnit
 from .utils import flatten_list_of_sets
 
 BATCH_SIZE = int(os.getenv("UBI_MANIFEST_BATCH_SIZE", "250"))
-
-
-def make_pulp_client(config):
-    auth = None
-
-    if config.username:
-        auth = (config.username, config.password)
-
-    return Client(config.url, auth=auth, verify=not config.insecure)
 
 
 def _search_units(repo, criteria_list, content_type_cls, batch_size_override=None):

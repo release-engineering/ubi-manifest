@@ -8,6 +8,7 @@ from ubi_manifest.worker.tasks.depsolver.utils import (
     flatten_list_of_sets,
     get_n_latest_from_content,
     parse_bool_deps,
+    split_filename,
     vercmp_sort,
 )
 
@@ -310,3 +311,34 @@ def test_create_or_criteria_uneven_args():
     # in value list
     with pytest.raises(ValueError):
         _ = create_or_criteria(fields, values)
+
+
+@pytest.mark.parametrize(
+    "filename, name, ver, rel, epoch, arch",
+    [
+        (
+            "32:bind-9.10.2-2.P1.fc22.x86_64.rpm",
+            "bind",
+            "9.10.2",
+            "2.P1.fc22",
+            "32",
+            "x86_64",
+        ),
+        (
+            "bind-9.10.2-2.P1.fc22.x86_64.rpm",
+            "bind",
+            "9.10.2",
+            "2.P1.fc22",
+            "",
+            "x86_64",
+        ),
+    ],
+)
+def test_split_filename(filename, name, ver, rel, epoch, arch):
+    result = split_filename(filename)
+
+    assert result[0] == name
+    assert result[1] == ver
+    assert result[2] == rel
+    assert result[3] == epoch
+    assert result[4] == arch

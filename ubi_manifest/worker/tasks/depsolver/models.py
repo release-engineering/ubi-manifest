@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Set
 
 from attrs import define
 from pubtools.pulplib import YumRepository
@@ -28,8 +28,6 @@ class UbiUnit:
 
 
 @define
-class UbiRepository:
-    whitelist: List[str]
-    resolved: List[UbiUnit]
-    in_pulp_repo: YumRepository
-    out_pulp_repo: YumRepository
+class DepsolverItem:
+    whitelist: Set[str]
+    in_pulp_repos: List[YumRepository]

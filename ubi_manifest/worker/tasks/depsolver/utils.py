@@ -2,11 +2,21 @@ import re
 from collections import defaultdict, deque
 from itertools import chain
 from logging import getLogger
+from typing import Dict, Tuple
 
-from pubtools.pulplib import Criteria
+from pubtools.pulplib import Client, Criteria
 from rpm import labelCompare as label_compare  # pylint: disable=no-name-in-module
 
 _LOG = getLogger(__name__)
+
+
+def make_pulp_client(url, username, password, insecure):
+    auth = None
+
+    if username:
+        auth = (username, password)
+
+    return Client(url, auth=auth, verify=not insecure)
 
 
 def create_or_criteria(fields, values):
@@ -145,3 +155,46 @@ def _keep_n_latest_rpms(rpms, n=1):
     latest_pkgs_per_arch = list(chain.from_iterable(pkgs_per_arch.values()))
 
     rpms[:] = latest_pkgs_per_arch
+
+
+# borrowed from https://github.com/rpm-software-management/yum
+def split_filename(filename: str) -> Tuple[str]:
+    """
+    Pass in a standard style rpm fullname
+
+    Return a name, version, release, epoch, arch, e.g.::
+        foo-1.0-1.i386.rpm returns foo, 1.0, 1, i386
+        1:bar-9-123a.ia64.rpm returns bar, 9, 123a, 1, ia64
+    """
+
+    if filename[-4:] == ".rpm":
+        filename = filename[:-4]
+
+    arch_index = filename.rfind(".")
+    arch = filename[arch_index + 1 :]
+
+    rel_index = filename[:arch_index].rfind("-")
+    rel = filename[rel_index + 1 : arch_index]
+
+    ver_index = filename[:rel_index].rfind("-")
+    ver = filename[ver_index + 1 : rel_index]
+
+    epoch_index = filename.find(":")
+
+    if epoch_index == -1:
+        epoch = ""
+    else:
+        epoch = filename[:epoch_index]
+
+    name = filename[epoch_index + 1 : ver_index]
+
+    return name, ver, rel, epoch, arch
+
+
+def remap_keys(mapping: Dict, dict_to_remap: Dict) -> Dict:
+    out = {}
+    for k, v in dict_to_remap.items():
+        new_key = mapping[k]
+        out.setdefault(new_key, []).extend(v)
+
+    return out
