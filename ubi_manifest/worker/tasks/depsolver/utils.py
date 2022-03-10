@@ -2,10 +2,13 @@ import re
 from collections import defaultdict, deque
 from itertools import chain
 from logging import getLogger
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 from pubtools.pulplib import Client, Criteria
 from rpm import labelCompare as label_compare  # pylint: disable=no-name-in-module
+from ubiconfig import UbiConfig
+
+from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude
 
 _LOG = getLogger(__name__)
 
@@ -48,13 +51,33 @@ def flatten_list_of_sets(list_of_sets):
     return out
 
 
-def get_n_latest_from_content(content, modular_rpms=None):
+def _is_blacklisted(package, blacklist):
+    for item in blacklist:
+        blacklisted = False
+        if item.globbing:
+            if package.name.startswith(item.name):
+                blacklisted = True
+        else:
+            if package.name == item.name:
+                blacklisted = True
+        if item.arch:
+            if package.arch != item.arch:
+                blacklisted = False
+
+        if blacklisted:
+            return blacklisted
+
+
+def get_n_latest_from_content(content, blacklist, modular_rpms=None):
     name_rpms_maps = {}
     for item in content:
         if modular_rpms:
             if item.filename in modular_rpms:
                 _LOG.debug("Skipping modular RPM %s", item.filename)
                 continue
+
+        if _is_blacklisted(item, blacklist):
+            continue
 
         name_rpms_maps.setdefault(item.name, []).append(item)
 
@@ -198,3 +221,18 @@ def remap_keys(mapping: Dict, dict_to_remap: Dict) -> Dict:
         out.setdefault(new_key, []).extend(v)
 
     return out
+
+
+def parse_blacklist_config(ubi_config: UbiConfig) -> List[PackageToExclude]:
+    packages_to_exclude = []
+    for package_pattern in ubi_config.packages.blacklist:
+        globbing = package_pattern.name.endswith("*")
+        if globbing:
+            name = package_pattern.name[:-1]
+        else:
+            name = package_pattern.name
+        arch = None if package_pattern.arch in ("*", None) else package_pattern.arch
+
+        packages_to_exclude.append(PackageToExclude(name, globbing, arch))
+
+    return packages_to_exclude
