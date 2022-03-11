@@ -19,6 +19,9 @@ class UbiUnit:
     def __str__(self):
         return str(self._unit)
 
+    def isinstance_inner_unit(self, klass):
+        return isinstance(self._unit, klass)
+
     # TODO make this return hash of self._unit if possible in future
     # it should help us with not adding the same units into sets
     # that differ with associate_source_repo_id attr only

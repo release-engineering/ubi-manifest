@@ -1,5 +1,9 @@
+import json
 import logging
 from typing import Dict, List
+
+import redis
+from pubtools.pulplib import RpmUnit
 
 from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.tasks.depsolver.models import DepsolverItem, UbiUnit
@@ -16,12 +20,16 @@ _LOG = logging.getLogger(__name__)
 
 
 @app.task
-def depsolve_task(ubi_repo_ids: List[str]) -> Dict[str, List[UbiUnit]]:
+def depsolve_task(ubi_repo_ids: List[str]) -> None:
     """
-    Run depsolvers for given ubi_repo_ids. Debuginfo repos related to those provide
-    as parameter are automatically resolved as well. Returns a dictionary where key is
-    a destination ubi_repo_id, value is a list of UbiUnit that should appear in
-    the repository.
+    Run depsolvers for given ubi_repo_ids - it's expected that id of binary
+    repositories are provided. Debuginfo and SRPM repos related to those ones
+    provided as parameter are automatically resolved as well, because content
+    of debuginfo and SRPM repos is dependent on the content of binary repo.
+    Depsolved units are saved to redis - key is a destination repository id
+    and value is a list of items, where item is a dict with keys:
+    (source_repo_id, unit_type, unit_attr, value). Note that value in redis
+    is stored as json string.
     """
     ubi_config_loader = UbiConfigLoader(app.conf["ubi_config_url"])
 
@@ -70,6 +78,9 @@ def depsolve_task(ubi_repo_ids: List[str]) -> Dict[str, List[UbiUnit]]:
             )
         # run depsolver for binary repos
         _LOG.info("Running depsolver for RPM repos: %s", list(dep_map.keys()))
+        # TODO this blocks task from processing, depsolving of debuginfo packages
+        # could be moved to the Depsolver. It should lead to more async processing
+        # and better performance
         out = _run_depsolver(list(dep_map.values()), repos_map, in_source_rpm_repos)
 
         # generate missing debuginfo packages
@@ -96,7 +107,30 @@ def depsolve_task(ubi_repo_ids: List[str]) -> Dict[str, List[UbiUnit]]:
         )
 
     out.update(debuginfo_out)
-    return out
+    # save depsolved data to redis
+    _save(out)
+
+
+def _save(data: Dict[str, List[UbiUnit]]) -> None:
+    redis_client = redis.from_url(app.conf.backend)
+
+    data_for_redis = {}
+    for repo_id, units in data.items():
+        for unit in units:
+            if unit.isinstance_inner_unit(RpmUnit):
+                item = {
+                    "src_repo_id": unit.associate_source_repo_id,
+                    "unit_type": "RpmUnit",
+                    "unit_attr": "filename",
+                    "value": unit.filename,
+                }
+
+            data_for_redis.setdefault(repo_id, []).append(item)
+    # save data to redis as key:json_string
+    for key, values in data_for_redis.items():
+        redis_client.set(
+            key, json.dumps(values), ex=app.conf["ubi_manifest_data_expiration"]
+        )
 
 
 def _filter_whitelist(ubi_config):

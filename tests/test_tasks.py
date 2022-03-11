@@ -1,16 +1,16 @@
+import json
 from unittest import mock
 
 from pubtools.pulplib import Distributor, RpmUnit
 
 from ubi_manifest.worker.tasks import depsolve
 
-from .utils import MockLoader, create_and_insert_repo
+from .utils import MockedRedis, MockLoader, create_and_insert_repo
 
 
 def test_depsolve_task(pulp):
     """
     Simulate run of depsolve task, check expected output of depsolving.
-    TODO task will return None in future, this test needs to be fixed accordingly
     """
     ubi_repo = create_and_insert_repo(
         id="ubi_repo",
@@ -61,6 +61,7 @@ def test_depsolve_task(pulp):
         epoch="1",
         arch="x86_64",
         sourcerpm="gcc_src-1-0.src.rpm",
+        filename="gcc-10.200.x86_64.rpm",
         requires=[],
         provides=[],
     )
@@ -73,6 +74,7 @@ def test_depsolve_task(pulp):
         arch="x86_64",
         requires=[],
         provides=[],
+        filename="gcc-debuginfo-10.200.x86_64.rpm",
     )
     unit_debugsource = RpmUnit(
         name="gcc_src-debugsource",
@@ -82,6 +84,7 @@ def test_depsolve_task(pulp):
         arch="x86_64",
         requires=[],
         provides=[],
+        filename="gcc_src-debugsource-10.200.x86_64.rpm",
     )
     unit_srpm = RpmUnit(
         name="gcc_src",
@@ -101,34 +104,60 @@ def test_depsolve_task(pulp):
 
     with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
         with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
-            client.return_value = pulp.client
-            # let run the depsolve task
-            result = depsolve.depsolve_task(["ubi_repo"])
+            with mock.patch(
+                "ubi_manifest.worker.tasks.depsolve.redis.from_url"
+            ) as mock_redis_from_url:
+                redis = MockedRedis(data={})
+                mock_redis_from_url.return_value = redis
 
-            # there should be 2 repos in output - one binary and one debuginfo
-            assert sorted(list(result.keys())) == [
-                "ubi_debug_repo",
-                "ubi_repo",
-                "ubi_source_repo",
-            ]
+                client.return_value = pulp.client
+                # let run the depsolve task
+                result = depsolve.depsolve_task(["ubi_repo"])
+                # we don't return anything useful, everything is saved in redis
+                assert result is None
 
-            # binary repo contains only one rpm
-            content = result["ubi_repo"]
-            assert len(content) == 1
-            unit = content[0]
-            assert unit.name == "gcc"
+                # there should 3 keys stored in redis
+                assert sorted(redis.keys()) == [
+                    "ubi_debug_repo",
+                    "ubi_repo",
+                    "ubi_source_repo",
+                ]
 
-            # debuginfo repo conains two debug packages
-            content = sorted(result["ubi_debug_repo"], key=lambda x: x.name)
-            assert len(content) == 2
-            unit = content[0]
-            assert unit.name == "gcc-debuginfo"
-            unit = content[1]
-            assert unit.name == "gcc_src-debugsource"
+                # load json string stored in redis
+                data = redis.get("ubi_repo")
+                content = json.loads(data)
+                # binary repo contains only one rpm
+                assert len(content) == 1
+                unit = content[0]
+                assert unit["src_repo_id"] == "rhel_repo"
+                assert unit["unit_type"] == "RpmUnit"
+                assert unit["unit_attr"] == "filename"
+                assert unit["value"] == "gcc-10.200.x86_64.rpm"
 
-            # source repo contain one SRPM package
-            content = result["ubi_source_repo"]
-            assert len(content) == 1
-            unit = content[0]
-            assert unit.name == "gcc_src"
-            assert unit.content_type_id == "srpm"
+                # load json string stored in redis
+                data = redis.get("ubi_debug_repo")
+                content = sorted(json.loads(data), key=lambda d: d["value"])
+                # debuginfo repo conains two debug packages
+                assert len(content) == 2
+                unit = content[0]
+                assert unit["src_repo_id"] == "rhel_debug_repo"
+                assert unit["unit_type"] == "RpmUnit"
+                assert unit["unit_attr"] == "filename"
+                assert unit["value"] == "gcc-debuginfo-10.200.x86_64.rpm"
+
+                unit = content[1]
+                assert unit["src_repo_id"] == "rhel_debug_repo"
+                assert unit["unit_type"] == "RpmUnit"
+                assert unit["unit_attr"] == "filename"
+                assert unit["value"] == "gcc_src-debugsource-10.200.x86_64.rpm"
+
+                # load json string stored in redis
+                data = redis.get("ubi_source_repo")
+                content = json.loads(data)
+                # source repo contain one SRPM package
+                assert len(content) == 1
+                unit = content[0]
+                assert unit["src_repo_id"] == "rhel_source_repo"
+                assert unit["unit_type"] == "RpmUnit"
+                assert unit["unit_attr"] == "filename"
+                assert unit["value"] == "gcc_src-1-0.src.rpm"
