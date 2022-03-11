@@ -118,13 +118,13 @@ def test_depsolve_task(pulp):
 
                 # there should 3 keys stored in redis
                 assert sorted(redis.keys()) == [
-                    "ubi_debug_repo",
-                    "ubi_repo",
-                    "ubi_source_repo",
+                    "manifest:ubi_debug_repo",
+                    "manifest:ubi_repo",
+                    "manifest:ubi_source_repo",
                 ]
 
                 # load json string stored in redis
-                data = redis.get("ubi_repo")
+                data = redis.get("manifest:ubi_repo")
                 content = json.loads(data)
                 # binary repo contains only one rpm
                 assert len(content) == 1
@@ -135,7 +135,7 @@ def test_depsolve_task(pulp):
                 assert unit["value"] == "gcc-10.200.x86_64.rpm"
 
                 # load json string stored in redis
-                data = redis.get("ubi_debug_repo")
+                data = redis.get("manifest:ubi_debug_repo")
                 content = sorted(json.loads(data), key=lambda d: d["value"])
                 # debuginfo repo conains two debug packages
                 assert len(content) == 2
@@ -152,7 +152,7 @@ def test_depsolve_task(pulp):
                 assert unit["value"] == "gcc_src-debugsource-10.200.x86_64.rpm"
 
                 # load json string stored in redis
-                data = redis.get("ubi_source_repo")
+                data = redis.get("manifest:ubi_source_repo")
                 content = json.loads(data)
                 # source repo contain one SRPM package
                 assert len(content) == 1

@@ -129,7 +129,9 @@ def _save(data: Dict[str, List[UbiUnit]]) -> None:
     # save data to redis as key:json_string
     for key, values in data_for_redis.items():
         redis_client.set(
-            key, json.dumps(values), ex=app.conf["ubi_manifest_data_expiration"]
+            f"manifest:{key}",
+            json.dumps(values),
+            ex=app.conf["ubi_manifest_data_expiration"],
         )
 
 

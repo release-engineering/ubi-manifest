@@ -43,3 +43,7 @@ class MockedRedis:
 
     def keys(self) -> List[str]:
         return list(self.data.keys())
+
+    def delete(self, key: str) -> None:
+        if key in self.data:
+            del self.data[key]

@@ -104,7 +104,8 @@ async def manifest_post(depsolve_item: DepsolveItem) -> List[TaskState]:
 )
 async def manifest_get(repo_id: str) -> DepsolverResult:
     redis_client = redis.from_url(app.conf.backend)
-    value = redis_client.get(repo_id) or ""
+    key = f"manifest:{repo_id}"
+    value = redis_client.get(key) or ""
     if value:
         content = []
         for value in json.loads(value):
@@ -112,6 +113,38 @@ async def manifest_get(repo_id: str) -> DepsolverResult:
             content.append(item)
         result = DepsolverResult(repo_id=repo_id, content=[item])
         return result
+
+    raise HTTPException(status_code=404, detail=f"Content for {repo_id} not found")
+
+
+@router.delete(
+    "/manifest/{repo_id}",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Succefully deleted manifest for repo_id entry",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "manifest:foo-bar-repo entry deleted"}
+                }
+            },
+        },
+        404: {
+            "description": "Entry for repo_id not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Content for foo-bar-repo not found"}
+                }
+            },
+        },
+    },
+)
+async def manifest_delete(repo_id: str):
+    redis_client = redis.from_url(app.conf.backend)
+    key = f"manifest:{repo_id}"
+    if key in redis_client.keys():
+        redis_client.delete(key)
+        return {"detail": f"{key} entry deleted"}
 
     raise HTTPException(status_code=404, detail=f"Content for {repo_id} not found")
 

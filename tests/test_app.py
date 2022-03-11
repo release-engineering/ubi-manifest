@@ -62,7 +62,7 @@ def test_manifest_get(client):
 
     depsolver_result_item_json_str = json.dumps(depsolver_result_item)
 
-    redis_data = {"ubi_repo_id": depsolver_result_item_json_str}
+    redis_data = {"manifest:ubi_repo_id": depsolver_result_item_json_str}
 
     with mock.patch("ubi_manifest.app.api.redis.from_url") as mock_redis_from_url:
         mock_redis_from_url.return_value = MockedRedis(data=redis_data)
@@ -153,3 +153,35 @@ def test_manifest_post_not_allowed(client):
             json_data["detail"]
             == "None of ['repo_not_allowed_1', 'repo_not_allowed_2'] are allowed for depsolving."
         )
+
+
+def test_manifest_delete(client):
+    """test removing depsolved content for repository from redis"""
+    depsolver_result_item = [
+        {
+            "src_repo_id": "source-foo-bar-repo",
+            "unit_type": "RpmUnit",
+            "unit_attr": "filename",
+            "value": "some-filename.rpm",
+        },
+    ]
+
+    depsolver_result_item_json_str = json.dumps(depsolver_result_item)
+
+    redis_data = {"manifest:ubi_repo_id": depsolver_result_item_json_str}
+
+    with mock.patch("ubi_manifest.app.api.redis.from_url") as mock_redis_from_url:
+        mock_redis_from_url.return_value = MockedRedis(data=redis_data)
+        # request deletion of ubi_repo_id entry
+        response = client.delete("/api/v1/manifest/ubi_repo_id")
+
+        # it should succeed
+        assert response.status_code == 200
+        assert response.json()["detail"] == "manifest:ubi_repo_id entry deleted"
+        # and the entry is removed
+        assert redis_data.get("ubi_repo_id") is None
+
+        # second cal for removing the same entry returns 404
+        response = client.delete(f"/api/v1/manifest/ubi_repo_id")
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Content for ubi_repo_id not found"
