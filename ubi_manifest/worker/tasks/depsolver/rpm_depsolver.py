@@ -1,16 +1,21 @@
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from itertools import chain
 from typing import List, Set
 
 from more_executors import Executors
 from more_executors.futures import f_proxy
-from pubtools.pulplib import Criteria
+from pubtools.pulplib import Criteria, YumRepository
 
-from .models import DepsolverItem
+from .models import DepsolverItem, UbiUnit
 from .pulp_queries import search_modulemds, search_rpms
-from .utils import create_or_criteria, get_n_latest_from_content, parse_bool_deps
+from .utils import (
+    _is_blacklisted,
+    create_or_criteria,
+    get_n_latest_from_content,
+    parse_bool_deps,
+)
 
 _LOG = logging.getLogger(__name__)
 
@@ -18,13 +23,17 @@ _LOG = logging.getLogger(__name__)
 # otherwise db may very likely hit OOM error.
 BATCH_SIZE_RPM = int(os.getenv("UBI_MANIFEST_BATCH_SIZE_RPM", "15"))
 BATCH_SIZE_RESOLVER = int(os.getenv("UBI_MANIFEST_BATCH_SIZE_RESOLVER", "150"))
+MAX_WORKERS = int(os.getenv("UBI_MANIFEST_DEPSOLVER_WORKERS", "8"))
 
 
 class Depsolver:
-    def __init__(self, repos: List[DepsolverItem]) -> None:
+    def __init__(self, repos: List[DepsolverItem], srpm_repos) -> None:
 
         self.repos: List[DepsolverItem] = repos
-        self.output_set: Set = set()
+        self.output_set: Set[UbiUnit] = set()
+        self.srpm_output_set: Set[UbiUnit] = set()
+
+        self._srpm_repos: List[Future[YumRepository]] = srpm_repos
 
         self._provides: Set = set()  # set of all rpm.provides we've visited
         self._requires: Set = set()  # set of all rpm.requires we've visited
@@ -34,7 +43,9 @@ class Depsolver:
 
         self._modular_rpms: Set = set()
 
-        self._executor: ThreadPoolExecutor = Executors.thread_pool(max_workers=4)
+        self._executor: ThreadPoolExecutor = Executors.thread_pool(
+            max_workers=MAX_WORKERS
+        )
 
     def __enter__(self):
         return self
@@ -108,6 +119,17 @@ class Depsolver:
 
         return newest_rpms
 
+    def get_source_pkgs(self, binary_rpms, blacklist):
+        crit = create_or_criteria(
+            ["filename"], [(rpm.sourcerpm,) for rpm in binary_rpms if rpm.sourcerpm]
+        )
+
+        content = f_proxy(
+            self._executor.submit(search_rpms, crit, self._srpm_repos, BATCH_SIZE_RPM)
+        )
+
+        return {rpm for rpm in content if not _is_blacklisted(rpm, blacklist)}
+
     def run(self):
         """
         Method runs whole depsolving machinery:
@@ -137,8 +159,15 @@ class Depsolver:
             )
             for repo in self.repos
         ]
+
+        source_rpm_fts = []
+
         for content in as_completed(content_fts):
             self.output_set.update(content.result())
+            ft = self._executor.submit(
+                self.get_source_pkgs, content.result(), merged_blacklist
+            )
+            source_rpm_fts.append(ft)
 
         to_resolve = set(self.output_set)
         while True:
@@ -159,6 +188,14 @@ class Depsolver:
             to_resolve = set(resolved)
             # add contetnt to the output set
             self.output_set.update(resolved)
+            # submit query for source rpms
+            ft = self._executor.submit(self.get_source_pkgs, resolved, merged_blacklist)
+            source_rpm_fts.append(ft)
+
+        # wait for srpm queries
+        for srpm_content in as_completed(source_rpm_fts):
+            for srpm in srpm_content.result():
+                self.srpm_output_set.add(srpm)
 
     def _batch_size(self):
         if len(self._unsolved) < BATCH_SIZE_RESOLVER:
@@ -170,7 +207,7 @@ class Depsolver:
 
     def export(self):
         out = {}
-        for item in self.output_set:
+        for item in self.output_set | self.srpm_output_set:
             out.setdefault(item.associate_source_repo_id, []).append(item)
 
         return out

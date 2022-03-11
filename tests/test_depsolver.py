@@ -12,7 +12,7 @@ from .utils import create_and_insert_repo
 
 def test_what_provides(pulp):
     """tests querying for provides in pulp"""
-    depsolver = Depsolver(None)
+    depsolver = Depsolver(None, None)
 
     requires = ["gcc"]
 
@@ -48,7 +48,7 @@ def test_what_provides(pulp):
 
 def test_extract_and_resolve():
     """test extracting provides and requires from RPM units"""
-    depsolver = Depsolver(None)
+    depsolver = Depsolver(None, None)
 
     # set initial data to depsolver instance
     depsolver._requires = {"pkg_a", "pkg_b"}
@@ -77,7 +77,7 @@ def test_extract_and_resolve():
 
 def test_get_base_packages(pulp):
     """test queries for input packages for given repo"""
-    depsolver = Depsolver(None)
+    depsolver = Depsolver(None, None)
 
     repo = create_and_insert_repo(id="test_repo_id", pulp=pulp)
 
@@ -123,7 +123,7 @@ def test_get_base_packages(pulp):
 
 def test_get_pkgs_from_all_modules(pulp):
     """tests getting pkgs filenames from all available modulemd units"""
-    depsolver = Depsolver(None)
+    depsolver = Depsolver(None, None)
 
     repo = create_and_insert_repo(id="test_repo_1", pulp=pulp)
 
@@ -179,7 +179,7 @@ def test_get_pkgs_from_all_modules(pulp):
 )
 def test_batch_size(items, expected_batch_size):
     """test proper calculation of a batch size"""
-    depsolver = Depsolver(None)
+    depsolver = Depsolver(None, None)
     depsolver._unsolved = {x for x in range(items)}
 
     batch_size = depsolver._batch_size()
@@ -189,7 +189,7 @@ def test_batch_size(items, expected_batch_size):
 
 def test_run(pulp):
     """test the main method of depsolver"""
-    repos, expected_output_set = _prepare_test_data(pulp)
+    repos, repo_srpm, expected_output_set = _prepare_test_data(pulp)
 
     blacklist_1 = [PackageToExclude("lib_exclude")]
     blacklist_2 = [PackageToExclude("base_pkg_to_exclude")]
@@ -212,55 +212,58 @@ def test_run(pulp):
         in_pulp_repos=[repos[1]],
     )
 
-    depsolver = Depsolver([dep_item_1, dep_item_2])
-    depsolver.run()
+    with Depsolver([dep_item_1, dep_item_2], [repo_srpm]) as depsolver:
+        depsolver.run()
 
-    # check internal state of depsolver object
-    # provides set holds all capabilities that we went through during depsolving
-    assert depsolver._provides == {
-        "gcc",
-        "jq",
-        "apr",
-        "babel",
-        "lib.a",
-        "lib.b",
-        "lib.c",
-        "lib.d",
-        "lib.e",
-        "lib.f",
-    }
+        # check internal state of depsolver object
+        # provides set holds all capabilities that we went through during depsolving
+        assert depsolver._provides == {
+            "gcc",
+            "jq",
+            "apr",
+            "babel",
+            "lib.a",
+            "lib.b",
+            "lib.c",
+            "lib.d",
+            "lib.e",
+            "lib.f",
+        }
 
-    # requires set holds all requires that we went through during depsolving
-    assert depsolver._requires == {
-        "lib.a",
-        "lib.b",
-        "lib.c",
-        "lib.d",
-        "lib.e",
-        "lib.g",
-        "lib_exclude",
-    }
+        # requires set holds all requires that we went through during depsolving
+        assert depsolver._requires == {
+            "lib.a",
+            "lib.b",
+            "lib.c",
+            "lib.d",
+            "lib.e",
+            "lib.g",
+            "lib_exclude",
+        }
 
-    # unsolved set should be empty after depsolving finishes
-    # it will be emptied even if we have unsolvable dependency
-    assert len(depsolver._unsolved) == 0
+        # unsolved set should be empty after depsolving finishes
+        # it will be emptied even if we have unsolvable dependency
+        assert len(depsolver._unsolved) == 0
 
-    # there are unsolved requires, we can get those by
-    unsolved = depsolver._requires - depsolver._provides
-    # there is exactly two unresolved deps, lib_exclude is unsolved due to blacklisting
-    assert unsolved == {"lib.g", "lib_exclude"}
+        # there are unsolved requires, we can get those by
+        unsolved = depsolver._requires - depsolver._provides
+        # there is exactly two unresolved deps, lib_exclude is unsolved due to blacklisting
+        assert unsolved == {"lib.g", "lib_exclude"}
 
-    # checking correct rpm names and its associate source repo id
-    output = [
-        (item.name, item.associate_source_repo_id) for item in depsolver.output_set
-    ]
-    assert sorted(output) == expected_output_set
+        # checking correct rpm and srpm names and its associate source repo id
+        output = [
+            (item.name, item.associate_source_repo_id)
+            for item in depsolver.output_set | depsolver.srpm_output_set
+        ]
+        assert sorted(output) == expected_output_set
 
 
 def _prepare_test_data(pulp):
     repo_1 = create_and_insert_repo(id="test_repo_1", pulp=pulp)
 
     repo_2 = create_and_insert_repo(id="test_repo_2", pulp=pulp)
+
+    repo_srpm = create_and_insert_repo(id="test_repo_srpm", pulp=pulp)
 
     unit_1 = RpmUnit(
         name="gcc",
@@ -270,6 +273,7 @@ def _prepare_test_data(pulp):
         arch="x86_64",
         provides=[RpmDependency(name="gcc"), RpmDependency(name="lib.a")],
         requires=[RpmDependency(name="lib.b"), RpmDependency(name="lib.c")],
+        sourcerpm="gcc.src.rpm",
     )
 
     unit_2 = RpmUnit(
@@ -329,6 +333,7 @@ def _prepare_test_data(pulp):
         arch="x86_64",
         provides=[RpmDependency(name="lib.e"), RpmDependency(name="lib.f")],
         requires=[],
+        sourcerpm="lib-y.src.rpm",
     )
 
     unit_7 = RpmUnit(
@@ -351,16 +356,45 @@ def _prepare_test_data(pulp):
         requires=[],
     )
 
+    unit_9 = RpmUnit(
+        name="gcc-source",
+        filename="gcc.src.rpm",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[],
+        requires=[],
+        content_type_id="srpm",
+    )
+
+    unit_10 = RpmUnit(
+        name="lib-y-source",
+        filename="lib-y.src.rpm",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[],
+        requires=[],
+        content_type_id="srpm",
+    )
+
     repo_1_units = [unit_1, unit_2, unit_5]
     repo_2_units = [unit_3, unit_4, unit_6]
+    repo_srpm_units = [unit_9, unit_10]
 
     pulp.insert_units(repo_1, repo_1_units)
     pulp.insert_units(
         repo_2, repo_2_units + [unit_7, unit_8]
     )  # add extra units, that will be excluded by blacklist
 
-    expected_output_set = [(unit.name, "test_repo_1") for unit in repo_1_units] + [
-        (unit.name, "test_repo_2") for unit in repo_2_units
-    ]
+    pulp.insert_units(repo_srpm, repo_srpm_units)
 
-    return [repo_1, repo_2], sorted(expected_output_set)
+    expected_output_set = (
+        [(unit.name, "test_repo_1") for unit in repo_1_units]
+        + [(unit.name, "test_repo_2") for unit in repo_2_units]
+        + [(unit.name, "test_repo_srpm") for unit in repo_srpm_units]
+    )
+
+    return [repo_1, repo_2], repo_srpm, sorted(expected_output_set)
