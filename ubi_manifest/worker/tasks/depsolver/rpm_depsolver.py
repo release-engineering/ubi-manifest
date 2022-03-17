@@ -108,6 +108,9 @@ class Depsolver:
         """
         Get the latest rpms that provides requirements from list_of_requires in given repos
         """
+        # TODO this may pull more than more packages (with different names)
+        # for given requirement. It should be decided which one should get into
+        # the output. Currently we'll get all matching the query.
         crit = create_or_criteria(
             ["provides.name"], [(item,) for item in list_of_requires]
         )
@@ -139,6 +142,7 @@ class Depsolver:
             B. set internal state of self accordingly to the content acquired
             C. request new content that provides remaining requirements
             D. content that provides requirements is added to self.output_set
+        3. During phase 1. and 2. source RPM packages are queried for already acquired RPMS.
         """
         pulp_repos = list(
             chain.from_iterable([repo.in_pulp_repos for repo in self.repos])

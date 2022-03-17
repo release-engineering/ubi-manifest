@@ -1,4 +1,7 @@
+from typing import List
+
 import ubiconfig
+from attrs import define
 from pubtools.pulplib import YumRepository
 
 
@@ -26,3 +29,17 @@ class MockLoader:
         }
 
         return [ubiconfig.UbiConfig.load_from_dict(config_raw, "foo", "8")]
+
+
+@define
+class MockedRedis:
+    data: dict
+
+    def set(self, key: str, value: str, **kwargs) -> None:
+        self.data[key] = value
+
+    def get(self, key: str) -> str:
+        return self.data.get(key)
+
+    def keys(self) -> List[str]:
+        return list(self.data.keys())

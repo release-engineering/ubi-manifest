@@ -103,6 +103,13 @@ html_theme_options = {
 # so a file named "default.css" will overwrite the builtin "default.css".
 # html_static_path = ["_static"]
 
+# This dir contains the generated openapi spec and the static redoc-based
+# api.html for viewing. Copy it alongside the other docs.
+# Note: to enable sphinx linking to api.html, we also have an api.rst
+# and it's expected to be overwritten here. We depend on the implementation
+# detail that html_extra_path copying happens after .rst rendering.
+html_extra_path = ["openapi"]
+
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
 #
