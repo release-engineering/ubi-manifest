@@ -1,0 +1,34 @@
+services:
+  redis:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile-broker
+    ports:
+      - 6379:6379
+    container_name: ubi-manifest-redis
+
+  worker:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile-workers
+    environment:
+      - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-bundle.crt
+    depends_on:
+      - redis
+
+  app:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile-app
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        uvicorn ubi_manifest.app.factory:create_app --factory --reload --host 0.0.0.0 --port 8000
+    ports:
+      - 8000:8000
+    depends_on:
+      - redis
+      - worker
+
+# TODO make the 'app' and 'workers' automatically reload on code change

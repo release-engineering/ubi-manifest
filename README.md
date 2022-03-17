@@ -23,29 +23,25 @@ pip install -r requirements-dev.txt
 pre-commit install
 ```
 
- - Setup and run fastapi app:
- - In py3 virtual env do:
+Dev-env setup:
+--------------
 
+For running ubi-manifest related containers one can use provided docker-compose file.
+For succesfull running of celery tasks, it's required to properly update the config file ./conf/app.conf
+with credentials to pulp and gitlab repository with ubi-config files.
+There are certs prepared in ./conf/certs/ for accessing dependent services, 
+if any different certs are required, copy them to the directory.
+
+Then podman-compose can be used for building and running the service:
 ```
-pip install .
-export CELERY_BROKER=redis://<ip_of_localhost>:6379/0
-export CELERY_RESULT_BACKEND=redis://<ip_of_localhost>:6379/0
-
-uvicorn ubi_manifest.app.factory:create_app --factory --reload 
+podman-compose build
+podman-compose up -d
 ```
+Service should be available at 127.0.0.0:8000.
 
-- Build and run redis in container:
-
+For removing containers:
 ```
-podman build . -t redis -f docker/Dockerfile-broker
-run -p 6379:6379 -d redis
-```
-
-- Build and run celery worker in container:
-
-```
-podman build . -t ubi-manifest-workers -f docker/Dockerfile-workers
-podman run --env CELERY_BROKER --env CELERY_RESULT_BACKEND -d ubi-manifest-workers 
+podman-compose down
 ```
 
 License
