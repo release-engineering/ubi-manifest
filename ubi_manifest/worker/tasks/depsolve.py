@@ -112,7 +112,7 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
 
 
 def _save(data: Dict[str, List[UbiUnit]]) -> None:
-    redis_client = redis.from_url(app.conf.backend)
+    redis_client = redis.from_url(app.conf.result_backend)
 
     data_for_redis = {}
     for repo_id, units in data.items():

@@ -103,7 +103,7 @@ async def manifest_post(depsolve_item: DepsolveItem) -> List[TaskState]:
     },
 )
 async def manifest_get(repo_id: str) -> DepsolverResult:
-    redis_client = redis.from_url(app.conf.backend)
+    redis_client = redis.from_url(app.conf.result_backend)
     value = redis_client.get(repo_id) or ""
     if value:
         content = []
