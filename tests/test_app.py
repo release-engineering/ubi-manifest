@@ -53,10 +53,16 @@ def test_manifest_get(client):
     """test getting depsolved content for repository"""
     depsolver_result_item = [
         {
-            "src_repo_id": "source-foo-bar-repo",
+            "src_repo_id": "source-foo-bar-repo-1",
             "unit_type": "RpmUnit",
             "unit_attr": "filename",
             "value": "some-filename.rpm",
+        },
+        {
+            "src_repo_id": "source-foo-bar-repo-2",
+            "unit_type": "RpmUnit",
+            "unit_attr": "filename",
+            "value": "some-other-filename.rpm",
         },
     ]
 
@@ -74,15 +80,22 @@ def test_manifest_get(client):
         # repo_id is set to the one we requested
         assert json_data["repo_id"] == "ubi_repo_id"
 
-        content = json_data["content"]
-        # there is only one unit in the content
-        assert len(content) == 1
+        content = sorted(json_data["content"], key=lambda x: x["value"])
+        # there are two units in the content
+        assert len(content) == 2
         content_item = content[0]
         # details of unit are set properly
-        assert content_item["src_repo_id"] == "source-foo-bar-repo"
+        assert content_item["src_repo_id"] == "source-foo-bar-repo-1"
         assert content_item["unit_type"] == "RpmUnit"
         assert content_item["unit_attr"] == "filename"
         assert content_item["value"] == "some-filename.rpm"
+
+        content_item = content[1]
+        # details of unit are set properly
+        assert content_item["src_repo_id"] == "source-foo-bar-repo-2"
+        assert content_item["unit_type"] == "RpmUnit"
+        assert content_item["unit_attr"] == "filename"
+        assert content_item["value"] == "some-other-filename.rpm"
 
 
 def test_manifest_get_not_found(client):

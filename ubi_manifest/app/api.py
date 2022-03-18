@@ -110,7 +110,7 @@ async def manifest_get(repo_id: str) -> DepsolverResult:
         for value in json.loads(value):
             item = DepsolverResultItem(**value)
             content.append(item)
-        result = DepsolverResult(repo_id=repo_id, content=[item])
+        result = DepsolverResult(repo_id=repo_id, content=content)
         return result
 
     raise HTTPException(status_code=404, detail=f"Content for {repo_id} not found")
