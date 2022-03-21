@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/v1")
 
 
 @router.get("/status")
-async def status():
+def status():
     return {"status": "OK"}
 
 
@@ -47,7 +47,7 @@ async def status():
         },
     },
 )
-async def manifest_post(depsolve_item: DepsolveItem) -> List[TaskState]:
+def manifest_post(depsolve_item: DepsolveItem) -> List[TaskState]:
     repo_groups = {}
     # compare provided repo_ids with the config and pick allowed repo groups
     for repo_id in depsolve_item.repo_ids:
@@ -102,7 +102,7 @@ async def manifest_post(depsolve_item: DepsolveItem) -> List[TaskState]:
         },
     },
 )
-async def manifest_get(repo_id: str) -> DepsolverResult:
+def manifest_get(repo_id: str) -> DepsolverResult:
     redis_client = redis.from_url(app.conf.result_backend)
     value = redis_client.get(repo_id) or ""
     if value:
@@ -142,7 +142,7 @@ async def manifest_get(repo_id: str) -> DepsolverResult:
         },
     },
 )
-async def task_state(task_id: str) -> TaskState:
+def task_state(task_id: str) -> TaskState:
     task = app.AsyncResult(task_id)
     if task:
         return TaskState(task_id=task.task_id, state=task.state)
