@@ -14,6 +14,9 @@ COPY ./docker/rpm-config/RPM-GPG-KEY-centosofficial /etc/pki/rpm-gpg/
 RUN yum repolist
 RUN yum install -y --disableplugin=subscription-manager rpm-devel
 
+# copy config
+COPY ./conf/app.conf /etc/ubi_manifest/app.conf
+
 # Switch back to unpriviledged user
 USER 1001
 
