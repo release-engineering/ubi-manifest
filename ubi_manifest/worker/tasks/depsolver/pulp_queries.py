@@ -20,7 +20,7 @@ def _search_units(repo, criteria_list, content_type_cls, batch_size_override=Non
         for unit in page.data:
             unit = UbiUnit(unit, repo.id)
             units.add(unit)
-        if page.next:
+        if page.next and page.next.result():
             return f_flat_map(page.next, handle_results)
         return f_return(units)
 
