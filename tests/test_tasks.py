@@ -75,6 +75,7 @@ def test_depsolve_task(pulp):
         requires=[],
         provides=[],
         filename="gcc-debuginfo-10.200.x86_64.rpm",
+        sourcerpm="gcc_src-1-0.src.rpm",
     )
     unit_debugsource = RpmUnit(
         name="gcc_src-debugsource",
@@ -85,6 +86,7 @@ def test_depsolve_task(pulp):
         requires=[],
         provides=[],
         filename="gcc_src-debugsource-10.200.x86_64.rpm",
+        sourcerpm="gcc_src_debug-1-0.src.rpm",
     )
     unit_srpm = RpmUnit(
         name="gcc_src",
@@ -97,10 +99,21 @@ def test_depsolve_task(pulp):
         filename="gcc_src-1-0.src.rpm",
         content_type_id="srpm",
     )
+    unit_srpm_debug = RpmUnit(
+        name="gcc_src_debug",
+        version="10",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        requires=[],
+        provides=[],
+        filename="gcc_src_debug-1-0.src.rpm",
+        content_type_id="srpm",
+    )
 
     pulp.insert_units(rhel_repo, [unit_binary])
     pulp.insert_units(rhel_debug_repo, [unit_debuginfo, unit_debugsource])
-    pulp.insert_units(rhel_source_repo, [unit_srpm])
+    pulp.insert_units(rhel_source_repo, [unit_srpm, unit_srpm_debug])
 
     with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
         with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
@@ -154,10 +167,16 @@ def test_depsolve_task(pulp):
                 # load json string stored in redis
                 data = redis.get("ubi_source_repo")
                 content = json.loads(data)
-                # source repo contain one SRPM package
-                assert len(content) == 1
+                # source repo contain two SRPM packages, no duplicates
+                assert len(content) == 2
                 unit = content[0]
                 assert unit["src_repo_id"] == "rhel_source_repo"
                 assert unit["unit_type"] == "RpmUnit"
                 assert unit["unit_attr"] == "filename"
                 assert unit["value"] == "gcc_src-1-0.src.rpm"
+
+                unit = content[1]
+                assert unit["src_repo_id"] == "rhel_source_repo"
+                assert unit["unit_type"] == "RpmUnit"
+                assert unit["unit_attr"] == "filename"
+                assert unit["value"] == "gcc_src_debug-1-0.src.rpm"
