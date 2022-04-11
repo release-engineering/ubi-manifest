@@ -106,7 +106,16 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
             list(debuginfo_dep_map.values()), repos_map, in_source_rpm_repos
         )
 
-    out.update(debuginfo_out)
+    # merge 'out' and 'debuginfo_out' dicts without overwriting any entry
+    for key, data in debuginfo_out.items():
+        if key in out:
+            filenames = [item.filename for item in out[key]]
+            for item in data:
+                if item.filename not in filenames:
+                    out[key].append(item)
+        else:
+            out[key] = data
+
     # save depsolved data to redis
     _save(out)
 

@@ -196,10 +196,14 @@ class Depsolver:
             ft = self._executor.submit(self.get_source_pkgs, resolved, merged_blacklist)
             source_rpm_fts.append(ft)
 
-        # wait for srpm queries
+        # wait for srpm queries and deduplicate the output set
+        # one SRPM can be shared with more than one binary/debug RPM
+        seen_srpm_filenames = set()
         for srpm_content in as_completed(source_rpm_fts):
             for srpm in srpm_content.result():
-                self.srpm_output_set.add(srpm)
+                if srpm.filename not in seen_srpm_filenames:
+                    self.srpm_output_set.add(srpm)
+                    seen_srpm_filenames.add(srpm.filename)
 
     def _batch_size(self):
         if len(self._unsolved) < BATCH_SIZE_RESOLVER:
