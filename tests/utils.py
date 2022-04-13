@@ -15,7 +15,14 @@ def create_and_insert_repo(**kwargs):
 class MockLoader:
     def load_all(self):
         config_raw = {
-            "modules": {},
+            "modules": {
+                "include": [
+                    {
+                        "name": "fake_name",
+                        "stream": "fake_stream",
+                    }
+                ]
+            },
             "packages": {
                 "include": ["package-name-.*", "gcc.*", "httpd.src", "pkg-debuginfo.*"],
                 "exclude": ["package-name*.*", "kernel", "kernel.x86_64"],

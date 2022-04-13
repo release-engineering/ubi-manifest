@@ -2,6 +2,7 @@ from typing import List, Set
 
 from attrs import define
 from pubtools.pulplib import YumRepository
+from ubiconfig.config_types.modules import Module
 
 
 class UbiUnit:
@@ -41,4 +42,11 @@ class PackageToExclude:
 class DepsolverItem:
     whitelist: Set[str]
     blacklist: List[PackageToExclude]
+    in_pulp_repos: List[YumRepository]
+
+
+@define
+class ModularDepsolverItem:
+    modulelist: List[Module]
+    repo: YumRepository
     in_pulp_repos: List[YumRepository]

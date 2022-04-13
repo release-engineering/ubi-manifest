@@ -1,7 +1,7 @@
 import json
 from unittest import mock
 
-from pubtools.pulplib import Distributor, RpmUnit
+from pubtools.pulplib import Distributor, RpmUnit, ModulemdUnit
 
 from ubi_manifest.worker.tasks import depsolve
 
@@ -110,7 +110,19 @@ def test_depsolve_task(pulp):
         filename="gcc_src_debug-1-0.src.rpm",
         content_type_id="srpm",
     )
+    unit_modulemd = ModulemdUnit(
+        name="fake_name",
+        stream="fake_stream",
+        version=8,
+        context="b7fad3bf",
+        arch="x86_64",
+        artifacts=[
+            "test-0:1.24-3.module+el8.1.0+2934+dec45db7.noarch",
+            "test-0:1.24-3.module+el8.1.0+2934+dec45db7.src",
+        ],
+    )
 
+    pulp.insert_units(rhel_repo, [unit_binary, unit_modulemd])
     pulp.insert_units(rhel_repo, [unit_binary])
     pulp.insert_units(rhel_debug_repo, [unit_debuginfo, unit_debugsource])
     pulp.insert_units(rhel_source_repo, [unit_srpm, unit_srpm_debug])
@@ -140,8 +152,13 @@ def test_depsolve_task(pulp):
                 data = redis.get("ubi_repo")
                 content = json.loads(data)
                 # binary repo contains only one rpm
-                assert len(content) == 1
+                assert len(content) == 2
                 unit = content[0]
+                assert unit["src_repo_id"] == "rhel_repo"
+                assert unit["unit_type"] == "ModulemdUnit"
+                assert unit["unit_attr"] == "nsvca"
+                assert unit["value"] == "fake_name:fake_stream:8:b7fad3bf:x86_64"
+                unit = content[1]
                 assert unit["src_repo_id"] == "rhel_repo"
                 assert unit["unit_type"] == "RpmUnit"
                 assert unit["unit_attr"] == "filename"

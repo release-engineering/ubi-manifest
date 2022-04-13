@@ -4,7 +4,7 @@ from itertools import chain
 from logging import getLogger
 from typing import Dict, List, Tuple
 
-from pubtools.pulplib import Client, Criteria
+from pubtools.pulplib import Client, Criteria, Matcher
 from rpm import labelCompare as label_compare  # pylint: disable=no-name-in-module
 from ubiconfig import UbiConfig
 
@@ -236,3 +236,66 @@ def parse_blacklist_config(ubi_config: UbiConfig) -> List[PackageToExclude]:
         packages_to_exclude.append(PackageToExclude(name, globbing, arch))
 
     return packages_to_exclude
+
+
+def keep_n_latest_modules(modules, n=1):
+    """
+    Keeps n latest modules in modules sorted list
+    """
+    modules_to_keep = []
+    versions_to_keep = sorted(set(m.version for m in modules))[-n:]
+
+    for module in modules:
+        if module.version in versions_to_keep:
+            modules_to_keep.append(module)
+
+    modules[:] = modules_to_keep
+
+
+def get_modulemd_output_set(modules):
+    """
+    Take all modular packages and for each package and stream return only the
+    latest version of it.
+    """
+    name_stream_modules_map = {}
+    # create internal dict structure for easier sorting
+    # mapping "name + stream": list of modules
+    for modulemd in modules:
+        key = modulemd.name + modulemd.stream
+        name_stream_modules_map.setdefault(key, []).append(modulemd)
+
+    out = []
+    # sort rpms and keep N latest versions of them
+    for module_list in name_stream_modules_map.values():
+        module_list.sort(key=lambda module: module.version)
+        keep_n_latest_modules(module_list)
+        out.extend(module_list)
+
+    return out
+
+
+def get_criteria_for_modules(modules):
+    """
+    Creates OR criteria that search for all modules by name and stream. If the
+    module has empty stream field, all modules with the corresponding name will be matched.
+    """
+    criteria_values = []
+    for module in modules:
+        if module.stream:
+            criteria_values.append(
+                (
+                    module.name,
+                    module.stream,
+                )
+            )
+        else:
+            criteria_values.append(
+                (
+                    module.name,
+                    Matcher.exists(),
+                )
+            )
+
+    fields = ("name", "stream")
+    or_criteria = create_or_criteria(fields, criteria_values)
+    return or_criteria
