@@ -1,5 +1,10 @@
 import pytest
-from pubtools.pulplib import ModulemdDependency, ModulemdUnit, RpmUnit
+from pubtools.pulplib import (
+    ModulemdDefaultsUnit,
+    ModulemdDependency,
+    ModulemdUnit,
+    RpmUnit,
+)
 from ubiconfig.config_types.modules import Module
 
 from ubi_manifest.worker.tasks.depsolver.models import (
@@ -34,6 +39,22 @@ def test_export(modular_depsolver):
     )
     unit2 = UbiUnit(module2, "test_repo1")
 
+    module_def1 = ModulemdDefaultsUnit(
+        name="perl",
+        stream="6.30",
+        repo_id="test_repo1",
+        repository_memberships=["test_repo1"],
+    )
+    unit_def1 = UbiUnit(module_def1, "test_repo1")
+
+    module_def2 = ModulemdDefaultsUnit(
+        name="perl-YAML",
+        stream="1.24",
+        repo_id="test_repo1",
+        repository_memberships=["test_repo1"],
+    )
+    unit_def2 = UbiUnit(module_def2, "test_repo1")
+
     module3 = ModulemdUnit(
         name="perl",
         stream="6.30",
@@ -54,9 +75,13 @@ def test_export(modular_depsolver):
     unit4 = UbiUnit(module4, "test_repo2")
 
     expected_out = {}
-    expected_out["modules"] = {"test_repo1": [unit1, unit2], "test_repo2": [unit3]}
+    expected_out["modules_out"] = {
+        "test_repo1": [unit1, unit2, unit_def1, unit_def2],
+        "test_repo2": [unit3],
+    }
 
     modular_depsolver.modules = [unit1, unit2, unit3, unit4]
+    modular_depsolver.default_modulemds = [unit_def1, unit_def2]
     dep_out = modular_depsolver.export()
 
     assert expected_out == dep_out
@@ -65,7 +90,7 @@ def test_export(modular_depsolver):
 def test_run(pulp):
     """Test the main method of ModularDepsolver."""
 
-    repos, expected_output_modules = _prepare_pulp(pulp)
+    repos, expected_output_modules, expected_def_modules = _prepare_pulp(pulp)
 
     modulelist1 = [Module("perl-YAML", "1.24")]
     in_pulp_repos1 = [repos[0]]
@@ -95,6 +120,14 @@ def test_run(pulp):
         )
         output_modules.sort(key=lambda x: (x[0], x[1]))
         assert output_modules == expected_output_modules
+
+        assert len(depsolver.default_modulemds) == 4
+
+        output_def_modules = list(
+            (x.name, x.stream, x.repo_id) for x in depsolver.default_modulemds
+        )
+        output_def_modules.sort(key=lambda x: (x[0], x[1]))
+        assert output_def_modules == expected_def_modules
 
 
 def _prepare_pulp(pulp):
@@ -179,7 +212,53 @@ def _prepare_pulp(pulp):
         ],
     )
 
-    repo_1_units = [module1, module2, module_dep_1, module_dep_2, ignored_module]
+    module_def1 = ModulemdDefaultsUnit(
+        name="perl-YAML",
+        stream="1.24",
+        repo_id="test_repo_1",
+        repository_memberships=["test_repo_1"],
+    )
+
+    module_def2 = ModulemdDefaultsUnit(
+        name="perl",
+        stream="5.30",
+        repo_id="test_repo_1",
+        repository_memberships=["test_repo_1"],
+    )
+
+    ignored_module_def = ModulemdDefaultsUnit(
+        name="ignored",
+        stream="6.30",
+        repo_id="test_repo_1",
+        repository_memberships=["test_repo_1"],
+    )
+
+    module_dep_def1 = ModulemdDefaultsUnit(
+        name="dependency_1",
+        stream="11.1",
+        repo_id="test_repo_1",
+        repository_memberships=["test_repo_1"],
+    )
+
+    module_dep_def2 = ModulemdDefaultsUnit(
+        name="dependency_2",
+        stream="2.22",
+        repo_id="test_repo_1",
+        repository_memberships=["test_repo_1"],
+    )
+
+    repo_1_units = [
+        module1,
+        module2,
+        module_dep_1,
+        module_dep_2,
+        ignored_module,
+        module_def1,
+        module_def2,
+        module_dep_def1,
+        module_dep_def2,
+        ignored_module_def,
+    ]
     pulp.insert_units(repo_1, repo_1_units)
 
     # Define mock module units for repo_2
@@ -247,16 +326,25 @@ def _prepare_pulp(pulp):
     repo_2_units = [module4, module_dep_3, module_dep_4, module_dep_5]
     pulp.insert_units(repo_2, repo_2_units)
 
-    expected_output_set = list(
+    expected_modulemds = list(
         [
             (module.name, module.stream, repo_1.id)
             for module in repo_1_units
-            if not module.name == "ignored"
+            if isinstance(module, ModulemdUnit) and not module.name == "ignored"
         ]
         + [(module.name, module.stream, repo_2.id) for module in repo_2_units]
     )
-    expected_output_set.sort(key=lambda x: (x[0], x[1]))
-    return [repo_1, repo_2], expected_output_set
+
+    expected_modulemd_defaults = list(
+        [
+            (module.name, module.stream, module.repo_id)
+            for module in repo_1_units
+            if isinstance(module, ModulemdDefaultsUnit) and not module.name == "ignored"
+        ]
+    )
+    expected_modulemd_defaults.sort(key=lambda x: (x[0], x[1]))
+    expected_modulemds.sort(key=lambda x: (x[0], x[1]))
+    return [repo_1, repo_2], expected_modulemds, expected_modulemd_defaults
 
 
 @pytest.fixture

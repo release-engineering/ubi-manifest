@@ -1,7 +1,7 @@
 import os
 
 from more_executors.futures import f_flat_map, f_map, f_proxy, f_return, f_sequence
-from pubtools.pulplib import Criteria, ModulemdUnit, RpmUnit
+from pubtools.pulplib import Criteria, ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
 
 from .models import UbiUnit
 from .utils import flatten_list_of_sets
@@ -75,5 +75,14 @@ def search_rpms(or_criteria, repos, batch_size_override=None):
         or_criteria,
         repos,
         content_type_cls=RpmUnit,
+        batch_size_override=batch_size_override,
+    )
+
+
+def search_modulemd_defaults(or_criteria, repos, batch_size_override=None):
+    return _search_units_per_repos(
+        or_criteria,
+        repos,
+        content_type_cls=ModulemdDefaultsUnit,
         batch_size_override=batch_size_override,
     )
