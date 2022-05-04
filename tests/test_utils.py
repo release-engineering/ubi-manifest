@@ -1,7 +1,13 @@
 from unittest import mock
 
 import pytest
-from pubtools.pulplib import Criteria, RpmUnit
+from pubtools.pulplib import (
+    Criteria,
+    Matcher,
+    ModulemdDependency,
+    ModulemdUnit,
+    RpmUnit,
+)
 
 from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
 from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
@@ -9,6 +15,8 @@ from ubi_manifest.worker.tasks.depsolver.utils import (
     _keep_n_latest_rpms,
     create_or_criteria,
     flatten_list_of_sets,
+    get_criteria_for_modules,
+    get_modulemd_output_set,
     get_n_latest_from_content,
     parse_blacklist_config,
     parse_bool_deps,
@@ -384,3 +392,83 @@ def test_parse_blacklist():
         assert item.name == "package-name"
         assert item.globbing is True
         assert item.arch is None
+
+
+def test_get_modulemd_output_set():
+
+    # Define mock UbiUnits
+
+    # two perl-YAML units with different versions, keep the highest version one
+    module1 = ModulemdUnit(
+        name="perl-YAML",
+        stream="1.24",
+        version=8,
+        context="b7fad3bf",
+        arch="x86_64",
+    )
+    unit1 = UbiUnit(module1, "test_repo1")
+
+    module2 = ModulemdUnit(
+        name="perl-YAML",
+        stream="1.24",
+        version=9,
+        context="b7fad3bf",
+        arch="x86_64",
+    )
+    unit2 = UbiUnit(module2, "test_repo1")
+
+    # two perl units with different contexts and one with lower version
+    # Both the units with the highest versions should be kept
+    module3 = ModulemdUnit(
+        name="perl",
+        stream="5.30",
+        version=8,
+        context="abc",
+        arch="x86_64",
+    )
+    unit3 = UbiUnit(module3, "test_repo1")
+
+    module4 = ModulemdUnit(
+        name="perl",
+        stream="5.30",
+        version=8,
+        context="def",
+        arch="x86_64",
+    )
+    unit4 = UbiUnit(module4, "test_repo1")
+
+    module5 = ModulemdUnit(
+        name="perl",
+        stream="5.30",
+        version=3,
+        context="ABC",
+        arch="x86_64",
+    )
+    unit5 = UbiUnit(module5, "test_repo1")
+
+    expected_output_set = [module2, module3, module4]
+    output_set = get_modulemd_output_set([module1, module2, module3, module4, module5])
+    assert output_set == expected_output_set
+
+
+def test_get_criteria_for_modules():
+    # define units to search
+    unit1 = ModulemdDependency(
+        name="perl",
+        stream="5.30",
+    )
+
+    unit2 = ModulemdDependency(
+        name="perl",
+        stream="6.30",
+    )
+
+    unit3 = ModulemdDependency(
+        name="perl-YAML",
+    )
+
+    expected_criteria = create_or_criteria(
+        ("name", "stream"),
+        [("perl", "5.30"), ("perl", "6.30"), ("perl-YAML", Matcher.exists())],
+    )
+    criteria = get_criteria_for_modules([unit1, unit2, unit3])

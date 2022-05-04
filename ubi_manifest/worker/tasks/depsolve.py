@@ -3,10 +3,15 @@ import logging
 from typing import Dict, List
 
 import redis
-from pubtools.pulplib import RpmUnit
+from pubtools.pulplib import ModulemdUnit, RpmUnit
 
 from ubi_manifest.worker.tasks.celery import app
-from ubi_manifest.worker.tasks.depsolver.models import DepsolverItem, UbiUnit
+from ubi_manifest.worker.tasks.depsolver.models import (
+    DepsolverItem,
+    ModularDepsolverItem,
+    UbiUnit,
+)
+from ubi_manifest.worker.tasks.depsolver.modulemd_depsolver import ModularDepsolver
 from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import Depsolver
 from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
 from ubi_manifest.worker.tasks.depsolver.utils import (
@@ -42,6 +47,7 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
         repos_map = {}
         debuginfo_dep_map = {}
         dep_map = {}
+        mod_dep_map = {}
         in_source_rpm_repos = []
         for ubi_repo_id in ubi_repo_ids:
             repo = client.get_repository(ubi_repo_id)
@@ -72,16 +78,33 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
             whitelist, debuginfo_whitelist = _filter_whitelist(config)
             blacklist = parse_blacklist_config(config)
 
+            modulelist = config.modules.whitelist
+            mod_dep_map[repo.id] = _make_modular_depsolver_item(
+                client, repo, modulelist
+            )
+
             dep_map[repo.id] = _make_depsolver_item(client, repo, whitelist, blacklist)
             debuginfo_dep_map[debuginfo_repo.id] = _make_depsolver_item(
                 client, debuginfo_repo, debuginfo_whitelist, blacklist
             )
+
+        # run modular depsolver
+        _LOG.info("Running MODULEMD depsolver for repos: %s", list(mod_dep_map.keys()))
+        modulemd_out = _run_modulemd_depsolver(list(mod_dep_map.values()), repos_map)
+        out = modulemd_out["modules"]
+
         # run depsolver for binary repos
         _LOG.info("Running depsolver for RPM repos: %s", list(dep_map.keys()))
         # TODO this blocks task from processing, depsolving of debuginfo packages
         # could be moved to the Depsolver. It should lead to more async processing
         # and better performance
-        out = _run_depsolver(list(dep_map.values()), repos_map, in_source_rpm_repos)
+        rpm_out = _run_depsolver(
+            list(dep_map.values()),
+            repos_map,
+            in_source_rpm_repos,
+        )
+
+        _merge_output_dictionary(out, rpm_out)
 
         # generate missing debuginfo packages
         # TODO this seems to generate too many debuginfo packages - fix after tests with real data
@@ -89,7 +112,7 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
             debuginfo_to_add = set()
             for pkg in pkg_list:
                 # inspired with pungi depsolver
-                if pkg.sourcerpm:
+                if pkg.isinstance_inner_unit(RpmUnit) and pkg.sourcerpm:
                     source_name = split_filename(pkg.sourcerpm)[0]
                     debuginfo_to_add.add(f"{pkg.name}-debuginfo")
                     debuginfo_to_add.add(f"{source_name}-debugsource")
@@ -107,14 +130,7 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
         )
 
     # merge 'out' and 'debuginfo_out' dicts without overwriting any entry
-    for key, data in debuginfo_out.items():
-        if key in out:
-            filenames = [item.filename for item in out[key]]
-            for item in data:
-                if item.filename not in filenames:
-                    out[key].append(item)
-        else:
-            out[key] = data
+    _merge_output_dictionary(out, debuginfo_out)
 
     # save depsolved data to redis
     _save(out)
@@ -132,6 +148,13 @@ def _save(data: Dict[str, List[UbiUnit]]) -> None:
                     "unit_type": "RpmUnit",
                     "unit_attr": "filename",
                     "value": unit.filename,
+                }
+            if unit.isinstance_inner_unit(ModulemdUnit):
+                item = {
+                    "src_repo_id": unit.associate_source_repo_id,
+                    "unit_type": "ModulemdUnit",
+                    "unit_attr": "nsvca",
+                    "value": unit.nsvca,
                 }
 
             data_for_redis.setdefault(repo_id, []).append(item)
@@ -162,6 +185,11 @@ def _make_depsolver_item(client, repo, whitelist, blacklist):
     return DepsolverItem(whitelist, blacklist, in_pulp_repos)
 
 
+def _make_modular_depsolver_item(client, repo, modulelist):
+    in_pulp_repos = _get_population_sources(client, repo)
+    return ModularDepsolverItem(modulelist, repo, in_pulp_repos)
+
+
 def _get_population_sources(client, repo):
     return [client.get_repository(repo_id) for repo_id in repo.population_sources]
 
@@ -172,3 +200,28 @@ def _run_depsolver(depolver_items, repos_map, in_source_rpm_repos):
         exported = depsolver.export()
         out = remap_keys(repos_map, exported)
     return out
+
+
+def _run_modulemd_depsolver(modular_items, repos_map):
+    with ModularDepsolver(modular_items) as depsolver:
+        depsolver.run()
+        out = depsolver.export()
+        out["modules"] = remap_keys(repos_map, out["modules"])
+    return out
+
+
+def _merge_output_dictionary(out, update):
+    """Appends to lists in out.values() instead of overwriting them"""
+    for key, data in update.items():
+        if key in out:
+            filenames = [
+                item.filename
+                for item in out[key]
+                # ModulemdUnits don't have filename attr.
+                if not item.isinstance_inner_unit(ModulemdUnit)
+            ]
+            for item in data:
+                if item.filename not in filenames:
+                    out[key].append(item)
+        else:
+            out[key] = data
