@@ -1,4 +1,7 @@
+from itertools import chain
+
 import pytest
+from more_executors.futures import f_proxy
 from pubtools.pulplib import (
     ModulemdDefaultsUnit,
     ModulemdDependency,
@@ -8,6 +11,7 @@ from pubtools.pulplib import (
 from ubiconfig.config_types.modules import Module
 
 from ubi_manifest.worker.tasks.depsolver.models import (
+    DepsolverItem,
     ModularDepsolverItem,
     PackageToExclude,
     UbiUnit,
@@ -74,14 +78,25 @@ def test_export(modular_depsolver):
     )
     unit4 = UbiUnit(module4, "test_repo2")
 
+    rpm_units = {
+        "perl-4:5.30.1-452.module+el8.4.0+8990+01326e37.src",
+        "perl-4:5.30.1-452.module+el8.4.0+8990+01326e37.x86_64",
+        "perl-archive-tar-0:2.32-440.module+el8.3.0+6718+7f269185.src",
+        "perl-archive-zip-0:1.67-1.module+el8.3.0+6718+7f269185.noarch",
+        "nodejs-debuginfo-1:10.24.0-1.module+el8.3.0+10166+b07ac28e.x86_64",
+        "nodejs-debugsource-1:10.24.0-1.module+el8.3.0+10166+b07ac28e.x86_64",
+    }
+
     expected_out = {}
     expected_out["modules_out"] = {
         "test_repo1": [unit1, unit2, unit_def1, unit_def2],
         "test_repo2": [unit3],
     }
+    expected_out["rpm_dependencies"] = rpm_units
 
     modular_depsolver.modules = [unit1, unit2, unit3, unit4]
     modular_depsolver.default_modulemds = [unit_def1, unit_def2]
+    modular_depsolver.rpm_dependencies = rpm_units
     dep_out = modular_depsolver.export()
 
     assert expected_out == dep_out
@@ -90,15 +105,17 @@ def test_export(modular_depsolver):
 def test_run(pulp):
     """Test the main method of ModularDepsolver."""
 
-    repos, expected_output_modules, expected_def_modules = _prepare_pulp(pulp)
+    expected_out = _prepare_pulp(pulp)
+    repo1 = expected_out["repos"][0]
+    repo2 = expected_out["repos"][1]
 
     modulelist1 = [Module("perl-YAML", "1.24")]
-    in_pulp_repos1 = [repos[0]]
-    mod_dep_item1 = ModularDepsolverItem(modulelist1, repos[0], in_pulp_repos1)
+    in_pulp_repos1 = [repo1]
+    mod_dep_item1 = ModularDepsolverItem(modulelist1, repo1, in_pulp_repos1)
 
-    modulelist2 = [Module("module_in_second_repo", "8.30")]
-    in_pulp_repos2 = [repos[1]]
-    mod_dep_item2 = ModularDepsolverItem(modulelist2, repos[1], in_pulp_repos2)
+    modulelist2 = [Module("module_in_second_repo", "8.30", ["test"])]
+    in_pulp_repos2 = [repo2]
+    mod_dep_item2 = ModularDepsolverItem(modulelist2, repo2, in_pulp_repos2)
 
     with ModularDepsolver([mod_dep_item1, mod_dep_item2]) as depsolver:
         depsolver.run()
@@ -106,28 +123,34 @@ def test_run(pulp):
         # all the modules should be searched
         assert depsolver._searched_modules["with_stream"] == set(
             f"{x[0]}:{x[1]}"
-            for x in expected_output_modules
+            for x in expected_out["modulemds"]
             if not x[0] == "test_none_in_stream"
         )
         assert depsolver._searched_modules["without_stream"] == set(
-            f"{x[0]}" for x in expected_output_modules if x[0] == "test_none_in_stream"
+            f"{x[0]}"
+            for x in expected_out["modulemds"]
+            if x[0] == "test_none_in_stream"
         )
 
-        assert len(depsolver.modules) == len(expected_output_modules)
+        assert len(depsolver.modules) == len(expected_out["modulemds"])
 
         output_modules = list(
             (x.name, x.stream, x.associate_source_repo_id) for x in depsolver.modules
         )
         output_modules.sort(key=lambda x: (x[0], x[1]))
-        assert output_modules == expected_output_modules
+        assert output_modules == expected_out["modulemds"]
 
+        # Check that the modulemdDefaults have been resolved
         assert len(depsolver.default_modulemds) == 4
 
         output_def_modules = list(
             (x.name, x.stream, x.repo_id) for x in depsolver.default_modulemds
         )
         output_def_modules.sort(key=lambda x: (x[0], x[1]))
-        assert output_def_modules == expected_def_modules
+        assert output_def_modules == expected_out["modulemd_defaults"]
+
+        # check the modular rpms:
+        assert depsolver.rpm_dependencies == expected_out["modular_rpms"]
 
 
 def _prepare_pulp(pulp):
@@ -165,6 +188,8 @@ def _prepare_pulp(pulp):
             "perl-4:5.30.1-452.module+el8.4.0+8990+01326e37.x86_64",
             "perl-archive-tar-0:2.32-440.module+el8.3.0+6718+7f269185.src",
             "perl-archive-zip-0:1.67-1.module+el8.3.0+6718+7f269185.noarch",
+            "nodejs-debuginfo-1:10.24.0-1.module+el8.3.0+10166+b07ac28e.x86_64",
+            "nodejs-debugsource-1:10.24.0-1.module+el8.3.0+10166+b07ac28e.x86_64",
         ],
         dependencies=[
             ModulemdDependency(name="dependency_2", stream="2.22"),
@@ -271,6 +296,7 @@ def _prepare_pulp(pulp):
         artifacts=[
             "secondRepoRPM-4:5.30.1-452.module+el8.4.0+8990+01326e37.src",
             "secondRepoRPM-4:5.30.1-452.module+el8.4.0+8990+01326e37.x86_64",
+            "this-is-not-in-profile-4:5.30.1-452.module+el8.4.0+8990+01326e37.x86_64",
         ],
         dependencies=[
             ModulemdDependency(
@@ -279,6 +305,7 @@ def _prepare_pulp(pulp):
             ModulemdDependency(name="test_none_in_stream", stream=None),
             ModulemdDependency(name="dependency_1", stream="11.1"),
         ],
+        profiles={"test": ["secondRepoRPM"]},
     )
 
     module_dep_3 = ModulemdUnit(
@@ -322,7 +349,6 @@ def _prepare_pulp(pulp):
             "dep3-archive-zip-0:1.67-1.module+el8.3.0+6718+7f269185.noarch",
         ],
     )
-
     repo_2_units = [module4, module_dep_3, module_dep_4, module_dep_5]
     pulp.insert_units(repo_2, repo_2_units)
 
@@ -344,16 +370,40 @@ def _prepare_pulp(pulp):
     )
     expected_modulemd_defaults.sort(key=lambda x: (x[0], x[1]))
     expected_modulemds.sort(key=lambda x: (x[0], x[1]))
-    return [repo_1, repo_2], expected_modulemds, expected_modulemd_defaults
+
+    modular_rpms = set(
+        chain.from_iterable(
+            [
+                module.artifacts_filenames
+                for module in repo_1_units + repo_2_units
+                if isinstance(module, ModulemdUnit) and not module.name == "ignored"
+            ]
+        )
+    )
+    # Filter out .src modular rpms
+    expected_modular_rpms = set(
+        filter(
+            lambda x: not x.endswith(".src.rpm") and not "not-in-profile" in x,
+            modular_rpms,
+        )
+    )
+
+    return {
+        "repos": [repo_1, repo_2],
+        "modulemds": expected_modulemds,
+        "modulemd_defaults": expected_modulemd_defaults,
+        "modular_rpms": expected_modular_rpms,
+    }
 
 
 @pytest.fixture
 def modular_depsolver(pulp):
     """Returns simple ModularDepsolver instance"""
     # Prepare modular depsolver item
-    repo = create_and_insert_repo(id="test_repo", pulp=pulp)
+    repo1 = create_and_insert_repo(id="test_repo1", pulp=pulp)
+    repo2 = create_and_insert_repo(id="test_repo2", pulp=pulp)
     modulelist = [Module("perl-YAML", "1.24")]
-    in_pulp_repos = [repo]
-    mod_dep_item = ModularDepsolverItem(modulelist, repo, in_pulp_repos)
+    in_pulp_repos = [repo1, repo2]
+    mod_dep_item = ModularDepsolverItem(modulelist, repo1, in_pulp_repos)
 
     return ModularDepsolver([mod_dep_item])

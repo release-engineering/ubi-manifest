@@ -12,7 +12,7 @@ from pubtools.pulplib import YumRepository
 
 from .models import ModularDepsolverItem, UbiUnit
 from .pulp_queries import search_modulemd_defaults, search_modulemds
-from .utils import get_criteria_for_modules, get_modulemd_output_set
+from .utils import get_criteria_for_modules, get_modulemd_output_set, split_filename
 
 _LOG = logging.getLogger(__name__)
 
@@ -29,6 +29,13 @@ class ModularDepsolver:
         self._input_repos: List[YumRepository] = list(
             chain.from_iterable(item.in_pulp_repos for item in self._modular_items)
         )
+        self._profiles = {}
+        for module in chain.from_iterable(
+            item.modulelist for item in self._modular_items
+        ):
+            key = f"{module.name}:{module.stream}"
+            self._profiles[key] = module.profiles
+
         # executor for this class, not adding retries because for pulp
         # we use executor from pulplib
         self._executor = Executors.thread_pool(
@@ -44,6 +51,8 @@ class ModularDepsolver:
         self.modules: List[UbiUnit] = []
         # output set of resolved modulemd defaults
         self.default_modulemds: List[UbiUnit] = []
+        # set of binary and debuginfo rpm dependencies to be resolved
+        self.rpm_dependencies: Set(str) = set()
 
     def __enter__(self):
         self._executor.__enter__()
@@ -90,6 +99,7 @@ class ModularDepsolver:
         )
 
         for module in filtered_modules:
+            self._update_rpm_dependencies(module)
             # If dependencies is None, skip it
             if not module.dependencies:
                 continue
@@ -122,8 +132,32 @@ class ModularDepsolver:
             or f"{module.name}:{module.stream}" in self._searched_modules["with_stream"]
         )
 
+    def _update_rpm_dependencies(self, module):
+        """
+        Adds all pkgs from artifacts to rpm dependencies. Omits source pkgs and
+        filters by profiles if available.
+        """
+        if module.artifacts:
+            pkg_names = []
+            key = f"{module.name}:{module.stream}"
+            if module.profiles:
+                for profile in self._profiles.get(key) or []:
+                    pkg_names.extend(module.profiles.get(profile) or [])
+
+            for pkg in module.artifacts_filenames:
+                # Filter out source packages
+                if pkg.endswith(".src.rpm"):
+                    continue
+                # filter by profile if available
+                if pkg_names:
+                    name, _, _, _, _ = split_filename(pkg)
+                    if name not in pkg_names:
+                        continue
+
+                self.rpm_dependencies.add(pkg)
+
     def export(self) -> Dict[str, Dict[str, List[UbiUnit]]]:
-        """Returns a dictionary of depsolved modules."""
+        """Returns a dictionary of depsolved modules and their rpm dependencies."""
         out = {}
         modules_out = {}
         nsvca_set = set()
@@ -144,5 +178,7 @@ class ModularDepsolver:
                 modules_out.setdefault(def_mod.associate_source_repo_id, []).append(
                     def_mod
                 )
+
+        out["rpm_dependencies"] = self.rpm_dependencies
         out["modules_out"] = modules_out
         return out

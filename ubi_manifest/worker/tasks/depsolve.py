@@ -78,6 +78,7 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
             whitelist, debuginfo_whitelist = _filter_whitelist(config)
             blacklist = parse_blacklist_config(config)
 
+            # modulemd depsolver vars
             modulelist = config.modules.whitelist
             mod_dep_map[repo.id] = _make_modular_depsolver_item(
                 client, repo, modulelist
@@ -92,6 +93,7 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
         _LOG.info("Running MODULEMD depsolver for repos: %s", list(mod_dep_map.keys()))
         modulemd_out = _run_modulemd_depsolver(list(mod_dep_map.values()), repos_map)
         out = modulemd_out["modules_out"]
+        modulemd_rpm_deps = modulemd_out["rpm_dependencies"]
 
         # run depsolver for binary repos
         _LOG.info("Running depsolver for RPM repos: %s", list(dep_map.keys()))
@@ -99,9 +101,7 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
         # could be moved to the Depsolver. It should lead to more async processing
         # and better performance
         rpm_out = _run_depsolver(
-            list(dep_map.values()),
-            repos_map,
-            in_source_rpm_repos,
+            list(dep_map.values()), repos_map, in_source_rpm_repos, modulemd_rpm_deps
         )
 
         _merge_output_dictionary(out, rpm_out)
@@ -126,7 +126,10 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
             "Running depsolver for DEBUGINFO repos: %s", list(debuginfo_dep_map.keys())
         )
         debuginfo_out = _run_depsolver(
-            list(debuginfo_dep_map.values()), repos_map, in_source_rpm_repos
+            list(debuginfo_dep_map.values()),
+            repos_map,
+            in_source_rpm_repos,
+            modulemd_rpm_deps,
         )
 
     # merge 'out' and 'debuginfo_out' dicts without overwriting any entry
@@ -201,8 +204,8 @@ def _get_population_sources(client, repo):
     return [client.get_repository(repo_id) for repo_id in repo.population_sources]
 
 
-def _run_depsolver(depolver_items, repos_map, in_source_rpm_repos):
-    with Depsolver(depolver_items, in_source_rpm_repos) as depsolver:
+def _run_depsolver(depolver_items, repos_map, in_source_rpm_repos, modulemd_deps):
+    with Depsolver(depolver_items, in_source_rpm_repos, modulemd_deps) as depsolver:
         depsolver.run()
         exported = depsolver.export()
         out = remap_keys(repos_map, exported)

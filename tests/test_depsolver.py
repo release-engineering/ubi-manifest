@@ -12,7 +12,7 @@ from .utils import create_and_insert_repo
 
 def test_what_provides(pulp):
     """tests querying for provides in pulp"""
-    depsolver = Depsolver(None, None)
+    depsolver = Depsolver(None, None, None)
 
     requires = ["gcc"]
 
@@ -48,7 +48,7 @@ def test_what_provides(pulp):
 
 def test_extract_and_resolve():
     """test extracting provides and requires from RPM units"""
-    depsolver = Depsolver(None, None)
+    depsolver = Depsolver(None, None, None)
 
     # set initial data to depsolver instance
     depsolver._requires = {"pkg_a", "pkg_b"}
@@ -77,7 +77,7 @@ def test_extract_and_resolve():
 
 def test_get_base_packages(pulp):
     """test queries for input packages for given repo"""
-    depsolver = Depsolver(None, None)
+    depsolver = Depsolver(None, None, None)
 
     repo = create_and_insert_repo(id="test_repo_id", pulp=pulp)
 
@@ -123,7 +123,7 @@ def test_get_base_packages(pulp):
 
 def test_get_pkgs_from_all_modules(pulp):
     """tests getting pkgs filenames from all available modulemd units"""
-    depsolver = Depsolver(None, None)
+    depsolver = Depsolver(None, None, None)
 
     repo = create_and_insert_repo(id="test_repo_1", pulp=pulp)
 
@@ -179,7 +179,7 @@ def test_get_pkgs_from_all_modules(pulp):
 )
 def test_batch_size(items, expected_batch_size):
     """test proper calculation of a batch size"""
-    depsolver = Depsolver(None, None)
+    depsolver = Depsolver(None, None, None)
     depsolver._unsolved = {x for x in range(items)}
 
     batch_size = depsolver._batch_size()
@@ -212,7 +212,11 @@ def test_run(pulp):
         in_pulp_repos=[repos[1]],
     )
 
-    with Depsolver([dep_item_1, dep_item_2], [repo_srpm]) as depsolver:
+    modules = {
+        "perl-version-1.99.24-441.module+el8.4.0+9911+7f269185.x86_64.rpm",
+    }
+
+    with Depsolver([dep_item_1, dep_item_2], [repo_srpm], modules) as depsolver:
         depsolver.run()
 
         # check internal state of depsolver object
@@ -228,6 +232,7 @@ def test_run(pulp):
             "lib.d",
             "lib.e",
             "lib.f",
+            "lib.z",
         }
 
         # requires set holds all requires that we went through during depsolving
@@ -239,6 +244,7 @@ def test_run(pulp):
             "lib.e",
             "lib.g",
             "lib_exclude",
+            "lib.z",
         }
 
         # unsolved set should be empty after depsolving finishes
@@ -380,11 +386,57 @@ def _prepare_test_data(pulp):
         content_type_id="srpm",
     )
 
-    repo_1_units = [unit_1, unit_2, unit_5]
+    md_unit_1 = ModulemdUnit(
+        name="test",
+        stream="10",
+        version=100,
+        context="abcdef",
+        arch="x86_64",
+        artifacts=[
+            "perl-version-7:0.99.24-441.module+el8.3.0+6718+7f269185.src",
+            "perl-version-7:0.99.24-441.module+el8.3.0+6718+7f269185.x86_64",
+        ],
+    )
+    md_unit_2 = ModulemdUnit(
+        name="test",
+        stream="20",
+        version=100,
+        context="abcdef",
+        arch="x86_64",
+        artifacts=[
+            "perl-version-7:1.99.24-441.module+el8.4.0+9911+7f269185.src",
+            "perl-version-7:1.99.24-441.module+el8.4.0+9911+7f269185.x86_64",
+        ],
+    )
+
+    unit_11 = RpmUnit(
+        name="perl",
+        filename="perl-version-1.99.24-441.module+el8.4.0+9911+7f269185.x86_64.rpm",
+        version="001",
+        release="099",
+        epoch="1",
+        arch="x86_64",
+        provides=[],
+        requires=[
+            RpmDependency(name="lib.z"),
+        ],
+    )
+
+    unit_12 = RpmUnit(
+        name="lib-z",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[RpmDependency(name="lib.z")],
+        requires=[],
+    )
+
+    repo_1_units = [unit_1, unit_2, unit_5, unit_11, unit_12]
     repo_2_units = [unit_3, unit_4, unit_6]
     repo_srpm_units = [unit_9, unit_10]
 
-    pulp.insert_units(repo_1, repo_1_units)
+    pulp.insert_units(repo_1, repo_1_units + [md_unit_1, md_unit_2])
     pulp.insert_units(
         repo_2, repo_2_units + [unit_7, unit_8]
     )  # add extra units, that will be excluded by blacklist

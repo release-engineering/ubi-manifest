@@ -27,9 +27,15 @@ MAX_WORKERS = int(os.getenv("UBI_MANIFEST_DEPSOLVER_WORKERS", "8"))
 
 
 class Depsolver:
-    def __init__(self, repos: List[DepsolverItem], srpm_repos) -> None:
+    def __init__(
+        self,
+        repos: List[DepsolverItem],
+        srpm_repos,
+        modulemd_dependencies: Set[str],
+    ) -> None:
 
         self.repos: List[DepsolverItem] = repos
+        self.modulemd_dependencies: Set[str] = modulemd_dependencies
         self.output_set: Set[UbiUnit] = set()
         self.srpm_output_set: Set[UbiUnit] = set()
 
@@ -41,7 +47,8 @@ class Depsolver:
         # set of solvables (pkg, lib, ...) that we use for checking remaining requires
         self._unsolved: Set = set()
 
-        self._modular_rpms: Set = set()
+        # List of all modular rpms available
+        self._modular_rpm_blacklist: Set = set()
 
         self._executor: ThreadPoolExecutor = Executors.thread_pool(
             max_workers=MAX_WORKERS
@@ -72,7 +79,25 @@ class Depsolver:
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
-        newest_rpms = get_n_latest_from_content(content, blacklist, self._modular_rpms)
+        newest_rpms = get_n_latest_from_content(
+            content, blacklist, self._modular_rpm_blacklist
+        )
+        return newest_rpms
+
+    def get_modulemd_packages(self, repos, pkgs_list):
+        """
+        Search for modulemd dependencies and return the latest versions
+        """
+        crit = create_or_criteria(["filename"], [(rpm,) for rpm in pkgs_list])
+
+        content = f_proxy(
+            self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
+        )
+
+        blacklist = []
+        newest_rpms = get_n_latest_from_content(
+            content, blacklist, self._modular_rpm_blacklist
+        )
         return newest_rpms
 
     def extract_and_resolve(self, content):
@@ -118,7 +143,9 @@ class Depsolver:
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
-        newest_rpms = get_n_latest_from_content(content, blacklist, self._modular_rpms)
+        newest_rpms = get_n_latest_from_content(
+            content, blacklist, self._modular_rpm_blacklist
+        )
 
         return newest_rpms
 
@@ -148,7 +175,8 @@ class Depsolver:
             chain.from_iterable([repo.in_pulp_repos for repo in self.repos])
         )
         # get modular rpms first
-        self._modular_rpms = self._get_pkgs_from_all_modules(pulp_repos)
+        _modular_rpms = self._get_pkgs_from_all_modules(pulp_repos)
+        self._modular_rpm_blacklist = _modular_rpms - self.modulemd_dependencies
 
         merged_blacklist = list(
             chain.from_iterable([repo.blacklist for repo in self.repos])
@@ -163,6 +191,13 @@ class Depsolver:
             )
             for repo in self.repos
         ]
+
+        if self.modulemd_dependencies:
+            content_fts.append(
+                self._executor.submit(
+                    self.get_modulemd_packages, pulp_repos, self.modulemd_dependencies
+                )
+            )
 
         source_rpm_fts = []
 
