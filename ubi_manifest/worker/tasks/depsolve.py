@@ -3,7 +3,7 @@ import logging
 from typing import Dict, List
 
 import redis
-from pubtools.pulplib import ModulemdUnit, RpmUnit
+from pubtools.pulplib import ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
 
 from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.tasks.depsolver.models import (
@@ -91,7 +91,7 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
         # run modular depsolver
         _LOG.info("Running MODULEMD depsolver for repos: %s", list(mod_dep_map.keys()))
         modulemd_out = _run_modulemd_depsolver(list(mod_dep_map.values()), repos_map)
-        out = modulemd_out["modules"]
+        out = modulemd_out["modules_out"]
 
         # run depsolver for binary repos
         _LOG.info("Running depsolver for RPM repos: %s", list(dep_map.keys()))
@@ -156,6 +156,13 @@ def _save(data: Dict[str, List[UbiUnit]]) -> None:
                     "unit_attr": "nsvca",
                     "value": unit.nsvca,
                 }
+            if unit.isinstance_inner_unit(ModulemdDefaultsUnit):
+                item = {
+                    "src_repo_id": unit.associate_source_repo_id,
+                    "unit_type": "ModulemdDefaultsUnit",
+                    "unit_attr": "name:stream",
+                    "value": f"{unit.name}:{unit.stream}",
+                }
 
             data_for_redis.setdefault(repo_id, []).append(item)
     # save data to redis as key:json_string
@@ -206,19 +213,22 @@ def _run_modulemd_depsolver(modular_items, repos_map):
     with ModularDepsolver(modular_items) as depsolver:
         depsolver.run()
         out = depsolver.export()
-        out["modules"] = remap_keys(repos_map, out["modules"])
+        out["modules_out"] = remap_keys(repos_map, out["modules_out"])
     return out
 
 
 def _merge_output_dictionary(out, update):
-    """Appends to lists in out.values() instead of overwriting them"""
+    """
+    Appends to lists in out.values() instead of overwriting them
+    WARNING: This works correctly only with RpmUnit values
+    """
     for key, data in update.items():
         if key in out:
             filenames = [
                 item.filename
                 for item in out[key]
                 # ModulemdUnits don't have filename attr.
-                if not item.isinstance_inner_unit(ModulemdUnit)
+                if item.isinstance_inner_unit(RpmUnit)
             ]
             for item in data:
                 if item.filename not in filenames:

@@ -11,7 +11,7 @@ from more_executors.futures import f_proxy
 from pubtools.pulplib import YumRepository
 
 from .models import ModularDepsolverItem, UbiUnit
-from .pulp_queries import search_modulemds
+from .pulp_queries import search_modulemd_defaults, search_modulemds
 from .utils import get_criteria_for_modules, get_modulemd_output_set
 
 _LOG = logging.getLogger(__name__)
@@ -42,6 +42,8 @@ class ModularDepsolver:
         }
         # output set of resolved modulemd packages
         self.modules: List[UbiUnit] = []
+        # output set of resolved modulemd defaults
+        self.default_modulemds: List[UbiUnit] = []
 
     def __enter__(self):
         self._executor.__enter__()
@@ -76,6 +78,17 @@ class ModularDepsolver:
         self.modules.extend(filtered_modules)
 
         modules_to_search = []
+        modulemd_defaults_criteria = get_criteria_for_modules(filtered_modules)
+        self.default_modulemds.extend(
+            f_proxy(
+                self._executor.submit(
+                    search_modulemd_defaults,
+                    modulemd_defaults_criteria,
+                    self._input_repos,
+                )
+            )
+        )
+
         for module in filtered_modules:
             # If dependencies is None, skip it
             if not module.dependencies:
@@ -121,5 +134,15 @@ class ModularDepsolver:
                 modules_out.setdefault(module.associate_source_repo_id, []).append(
                     module
                 )
-        out["modules"] = modules_out
+
+        # append ModulemdDefaultsUnits to output set
+        def_mod_ids = set()
+        for def_mod in self.default_modulemds:
+            # filter duplicates
+            if def_mod.unit_id not in def_mod_ids:
+                def_mod_ids.add(f"{def_mod.name}:{def_mod.stream}")
+                modules_out.setdefault(def_mod.associate_source_repo_id, []).append(
+                    def_mod
+                )
+        out["modules_out"] = modules_out
         return out
