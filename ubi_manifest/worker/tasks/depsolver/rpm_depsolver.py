@@ -271,7 +271,12 @@ class Depsolver:
 
     def export(self):
         out = {}
+        # set of unique filenames
+        filenames = set()
         for item in self.output_set | self.srpm_output_set:
-            out.setdefault(item.associate_source_repo_id, []).append(item)
+            # deduplicate output sets
+            if item.filename not in filenames:
+                filenames.add(item.filename)
+                out.setdefault(item.associate_source_repo_id, []).append(item)
 
         return out
