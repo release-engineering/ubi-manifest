@@ -145,9 +145,6 @@ class ModularDepsolver:
                     pkg_names.extend(module.profiles.get(profile) or [])
 
             for pkg in module.artifacts_filenames:
-                # Filter out source packages
-                if pkg.endswith(".src.rpm"):
-                    continue
                 # filter by profile if available
                 if pkg_names:
                     name, _, _, _, _ = split_filename(pkg)

@@ -192,14 +192,35 @@ class Depsolver:
             for repo in self.repos
         ]
 
-        if self.modulemd_dependencies:
-            content_fts.append(
-                self._executor.submit(
-                    self.get_modulemd_packages, pulp_repos, self.modulemd_dependencies
-                )
-            )
-
         source_rpm_fts = []
+
+        if self.modulemd_dependencies:
+            # Divide modular dependencies into binary and modular rpms
+            binary_modular_deps = set()
+            source_modular_deps = set()
+            for item in self.modulemd_dependencies:
+                if ".src.rpm" in item:
+                    source_modular_deps.add(item)
+                else:
+                    binary_modular_deps.add(item)
+
+            # Get moduelmd binary rpm dependencies
+            if binary_modular_deps:
+                content_fts.append(
+                    self._executor.submit(
+                        self.get_modulemd_packages, pulp_repos, binary_modular_deps
+                    )
+                )
+
+            # Get modulemd source rpm dependencies
+            if source_modular_deps:
+                source_rpm_fts.append(
+                    self._executor.submit(
+                        self.get_modulemd_packages,
+                        self._srpm_repos,
+                        source_modular_deps,
+                    )
+                )
 
         for content in as_completed(content_fts):
             self.output_set.update(content.result())

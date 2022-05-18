@@ -81,10 +81,9 @@ def test_export(modular_depsolver):
     rpm_units = {
         "perl-4:5.30.1-452.module+el8.4.0+8990+01326e37.src",
         "perl-4:5.30.1-452.module+el8.4.0+8990+01326e37.x86_64",
-        "perl-archive-tar-0:2.32-440.module+el8.3.0+6718+7f269185.src",
         "perl-archive-zip-0:1.67-1.module+el8.3.0+6718+7f269185.noarch",
         "nodejs-debuginfo-1:10.24.0-1.module+el8.3.0+10166+b07ac28e.x86_64",
-        "nodejs-debugsource-1:10.24.0-1.module+el8.3.0+10166+b07ac28e.x86_64",
+        "perl-4:5.30.1-452.module+el8.4.0+8990+01326e37.src",
     }
 
     expected_out = {}
@@ -383,7 +382,7 @@ def _prepare_pulp(pulp):
     # Filter out .src modular rpms
     expected_modular_rpms = set(
         filter(
-            lambda x: not x.endswith(".src.rpm") and not "not-in-profile" in x,
+            lambda x: not "not-in-profile" in x,
             modular_rpms,
         )
     )
