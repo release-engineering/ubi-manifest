@@ -212,11 +212,12 @@ def test_run(pulp):
         in_pulp_repos=[repos[1]],
     )
 
-    modules = {
+    module_rpms = {
         "perl-version-1.99.24-441.module+el8.4.0+9911+7f269185.x86_64.rpm",
+        "yaml-version-0.99.24-441.module+el8.4.0+9911+7f269185.src.rpm",
     }
 
-    with Depsolver([dep_item_1, dep_item_2], [repo_srpm], modules) as depsolver:
+    with Depsolver([dep_item_1, dep_item_2], [repo_srpm], module_rpms) as depsolver:
         depsolver.run()
 
         # check internal state of depsolver object
@@ -432,9 +433,21 @@ def _prepare_test_data(pulp):
         requires=[],
     )
 
+    unit_13 = RpmUnit(
+        name="yaml",
+        filename="yaml-version-0.99.24-441.module+el8.4.0+9911+7f269185.src.rpm",
+        version="000",
+        release="099",
+        epoch="1",
+        arch="x86_64",
+        provides=[],
+        requires=[],
+        content_type_id="srpm",
+    )
+
     repo_1_units = [unit_1, unit_2, unit_5, unit_11, unit_12]
     repo_2_units = [unit_3, unit_4, unit_6]
-    repo_srpm_units = [unit_9, unit_10]
+    repo_srpm_units = [unit_9, unit_10, unit_13]
 
     pulp.insert_units(repo_1, repo_1_units + [md_unit_1, md_unit_2])
     pulp.insert_units(

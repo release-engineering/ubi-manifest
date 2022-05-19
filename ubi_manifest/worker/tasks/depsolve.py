@@ -101,7 +101,10 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
         # could be moved to the Depsolver. It should lead to more async processing
         # and better performance
         rpm_out = _run_depsolver(
-            list(dep_map.values()), repos_map, in_source_rpm_repos, modulemd_rpm_deps
+            list(dep_map.values()),
+            repos_map,
+            in_source_rpm_repos,
+            modulemd_rpm_deps,
         )
 
         _merge_output_dictionary(out, rpm_out)
