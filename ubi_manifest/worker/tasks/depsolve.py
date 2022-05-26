@@ -147,6 +147,7 @@ def _save(data: Dict[str, List[UbiUnit]]) -> None:
 
     data_for_redis = {}
     for repo_id, units in data.items():
+        items = []
         for unit in units:
             if unit.isinstance_inner_unit(RpmUnit):
                 item = {
@@ -155,22 +156,23 @@ def _save(data: Dict[str, List[UbiUnit]]) -> None:
                     "unit_attr": "filename",
                     "value": unit.filename,
                 }
-            if unit.isinstance_inner_unit(ModulemdUnit):
+            elif unit.isinstance_inner_unit(ModulemdUnit):
                 item = {
                     "src_repo_id": unit.associate_source_repo_id,
                     "unit_type": "ModulemdUnit",
                     "unit_attr": "nsvca",
                     "value": unit.nsvca,
                 }
-            if unit.isinstance_inner_unit(ModulemdDefaultsUnit):
+            elif unit.isinstance_inner_unit(ModulemdDefaultsUnit):
                 item = {
                     "src_repo_id": unit.associate_source_repo_id,
                     "unit_type": "ModulemdDefaultsUnit",
                     "unit_attr": "name:stream",
                     "value": f"{unit.name}:{unit.stream}",
                 }
+            items.append(item)
 
-            data_for_redis.setdefault(repo_id, []).append(item)
+        data_for_redis[repo_id] = items
     # save data to redis as key:json_string
     for key, values in data_for_redis.items():
         redis_client.set(
