@@ -98,6 +98,28 @@ def test_manifest_get(client):
         assert content_item["value"] == "some-other-filename.rpm"
 
 
+def test_manifest_get_empty(client):
+    """test getting empty manifest for repository"""
+    depsolver_result_item = []
+    depsolver_result_item_json_str = json.dumps(depsolver_result_item)
+
+    redis_data = {"ubi_repo_id": depsolver_result_item_json_str}
+
+    with mock.patch("ubi_manifest.app.api.redis.from_url") as mock_redis_from_url:
+        mock_redis_from_url.return_value = MockedRedis(data=redis_data)
+        response = client.get(f"/api/v1/manifest/ubi_repo_id")
+
+        # expected status code in 200
+        assert response.status_code == 200
+        json_data = response.json()
+        # repo_id is set to the one we requested
+        assert json_data["repo_id"] == "ubi_repo_id"
+
+        content = sorted(json_data["content"], key=lambda x: x["value"])
+        # the content is empty
+        assert len(content) == 0
+
+
 def test_manifest_get_not_found(client):
     """test getting depsolved content when the cotent is not available for given repo_id"""
     with mock.patch("ubi_manifest.app.api.redis.from_url") as mock_redis_from_url:

@@ -138,6 +138,11 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
     # merge 'out' and 'debuginfo_out' dicts without overwriting any entry
     _merge_output_dictionary(out, debuginfo_out)
 
+    # make sure that there are all ubi repositories in the 'out' dictionary set a keys
+    # repositories with empty manifest are ommited from previous processing
+    for repo_id in repos_map.values():
+        if repo_id not in out:
+            out[repo_id] = []
     # save depsolved data to redis
     _save(out)
 

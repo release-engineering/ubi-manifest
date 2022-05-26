@@ -206,3 +206,83 @@ def test_depsolve_task(pulp):
                 assert unit["unit_type"] == "RpmUnit"
                 assert unit["unit_attr"] == "filename"
                 assert unit["value"] == "gcc_src_debug-1-0.src.rpm"
+
+
+def test_depsolve_task_empty_manifests(pulp):
+    """
+    Simulate run of depsolve task, check expected output of depsolving. Extra case
+    for empty manifests.
+    """
+    ubi_repo = create_and_insert_repo(
+        id="ubi_repo",
+        pulp=pulp,
+        population_sources=["rhel_repo"],
+        relative_url="foo/bar/os",
+        ubi_config_version="8.4",
+        content_set="rpm_in",
+    )
+    rhel_repo = create_and_insert_repo(id="rhel_repo", pulp=pulp)
+
+    distributor_debug = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="ubi_debug_repo",
+        relative_url="foo/bar/debug",
+    )
+
+    ubi_debug_repo = create_and_insert_repo(
+        id="ubi_debug_repo",
+        pulp=pulp,
+        population_sources=["rhel_debug_repo"],
+        relative_url="foo/bar/debug",
+        distributors=[distributor_debug],
+    )
+    rhel_debug_repo = create_and_insert_repo(id="rhel_debug_repo", pulp=pulp)
+
+    distributor_source = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="ubi_source_repo",
+        relative_url="foo/bar/source/SRPMS",
+    )
+
+    ubi_source_repo = create_and_insert_repo(
+        id="ubi_source_repo",
+        pulp=pulp,
+        population_sources=["rhel_source_repo"],
+        relative_url="foo/bar/source/SRPMS",
+        distributors=[distributor_source],
+    )
+    rhel_source_repo = create_and_insert_repo(id="rhel_source_repo", pulp=pulp)
+
+    with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
+        with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
+            with mock.patch(
+                "ubi_manifest.worker.tasks.depsolve.redis.from_url"
+            ) as mock_redis_from_url:
+                redis = MockedRedis(data={})
+                mock_redis_from_url.return_value = redis
+
+                client.return_value = pulp.client
+                # let run the depsolve task
+                result = depsolve.depsolve_task(["ubi_repo"])
+                # we don't return anything useful, everything is saved in redis
+                assert result is None
+
+                # there should 3 keys stored in redis
+                assert sorted(redis.keys()) == [
+                    "ubi_debug_repo",
+                    "ubi_repo",
+                    "ubi_source_repo",
+                ]
+
+                for repo in [
+                    "ubi_debug_repo",
+                    "ubi_repo",
+                    "ubi_source_repo",
+                ]:
+                    # load json string stored in redis
+                    data = redis.get(repo)
+                    content = json.loads(data)
+                    # content should be empty
+                    assert len(content) == 0
