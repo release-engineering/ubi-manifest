@@ -215,6 +215,7 @@ def test_run(pulp):
     module_rpms = {
         "perl-version-1.99.24-441.module+el8.4.0+9911+7f269185.x86_64.rpm",
         "yaml-version-0.99.24-441.module+el8.4.0+9911+7f269185.src.rpm",
+        "perl-version-0.99.24-441.module+el8.3.0+6718+7f269185.x86_64.rpm",
     }
 
     with Depsolver([dep_item_1, dep_item_2], [repo_srpm], module_rpms) as depsolver:
@@ -409,18 +410,30 @@ def _prepare_test_data(pulp):
             "perl-version-7:1.99.24-441.module+el8.4.0+9911+7f269185.x86_64",
         ],
     )
-
-    unit_11 = RpmUnit(
+    # unit_11a/b are modular units, both of them has to be added to the output set
+    # because they're listed on some module's artifacts
+    unit_11a = RpmUnit(
         name="perl",
         filename="perl-version-1.99.24-441.module+el8.4.0+9911+7f269185.x86_64.rpm",
-        version="001",
-        release="099",
+        version="1.99.24",
+        release="441.module+el8.4.0+9911+7f269185",
         epoch="1",
         arch="x86_64",
         provides=[],
         requires=[
             RpmDependency(name="lib.z"),
         ],
+    )
+
+    unit_11b = RpmUnit(
+        name="perl",
+        filename="perl-version-0.99.24-441.module+el8.3.0+6718+7f269185.x86_64.rpm",
+        version="0.99.24",
+        release="441.module+el8.3.0+6718+7f269185",
+        epoch="0",
+        arch="x86_64",
+        provides=[],
+        requires=[],
     )
 
     unit_12 = RpmUnit(
@@ -445,7 +458,7 @@ def _prepare_test_data(pulp):
         content_type_id="srpm",
     )
 
-    repo_1_units = [unit_1, unit_2, unit_5, unit_11, unit_12]
+    repo_1_units = [unit_1, unit_2, unit_5, unit_11a, unit_11b, unit_12]
     repo_2_units = [unit_3, unit_4, unit_6]
     repo_srpm_units = [unit_9, unit_10, unit_13]
 
