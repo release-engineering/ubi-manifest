@@ -86,19 +86,14 @@ class Depsolver:
 
     def get_modulemd_packages(self, repos, pkgs_list):
         """
-        Search for modulemd dependencies and return the latest versions
+        Search for modulemd dependencies
         """
         crit = create_or_criteria(["filename"], [(rpm,) for rpm in pkgs_list])
 
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
-
-        blacklist = []
-        newest_rpms = get_n_latest_from_content(
-            content, blacklist, self._modular_rpm_blacklist
-        )
-        return newest_rpms
+        return content
 
     def extract_and_resolve(self, content):
         """
