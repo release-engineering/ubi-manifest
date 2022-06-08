@@ -47,8 +47,8 @@ class Depsolver:
         # set of solvables (pkg, lib, ...) that we use for checking remaining requires
         self._unsolved: Set = set()
 
-        # List of all modular rpms available
-        self._modular_rpm_blacklist: Set = set()
+        # Set of all modular rpms
+        self._modular_rpms: Set = set()
 
         self._executor: ThreadPoolExecutor = Executors.thread_pool(
             max_workers=MAX_WORKERS
@@ -79,9 +79,7 @@ class Depsolver:
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
-        newest_rpms = get_n_latest_from_content(
-            content, blacklist, self._modular_rpm_blacklist
-        )
+        newest_rpms = get_n_latest_from_content(content, blacklist, self._modular_rpms)
         return newest_rpms
 
     def get_modulemd_packages(self, repos, pkgs_list):
@@ -138,9 +136,7 @@ class Depsolver:
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
-        newest_rpms = get_n_latest_from_content(
-            content, blacklist, self._modular_rpm_blacklist
-        )
+        newest_rpms = get_n_latest_from_content(content, blacklist, self._modular_rpms)
 
         return newest_rpms
 
@@ -170,8 +166,7 @@ class Depsolver:
             chain.from_iterable([repo.in_pulp_repos for repo in self.repos])
         )
         # get modular rpms first
-        _modular_rpms = self._get_pkgs_from_all_modules(pulp_repos)
-        self._modular_rpm_blacklist = _modular_rpms - self.modulemd_dependencies
+        self._modular_rpms = self._get_pkgs_from_all_modules(pulp_repos)
 
         merged_blacklist = list(
             chain.from_iterable([repo.blacklist for repo in self.repos])
