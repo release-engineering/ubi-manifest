@@ -8,6 +8,24 @@ from .utils import flatten_list_of_sets
 
 BATCH_SIZE = int(os.getenv("UBI_MANIFEST_BATCH_SIZE", "250"))
 
+RPM_FIELDS = ["name", "filename", "sourcerpm", "requires", "provides"]
+MODULEMD_FIELDS = [
+    "name",
+    "stream",
+    "version",
+    "context",
+    "arch",
+    "dependencies",
+    "profiles",
+    "artifacts",
+]
+
+UNIT_FIELDS = {
+    RpmUnit: RPM_FIELDS,
+    ModulemdUnit: MODULEMD_FIELDS,
+    # using fields limit to query doesn't work for modulemd_defaults unit
+}
+
 
 def _search_units(repo, criteria_list, content_type_cls, batch_size_override=None):
     """
@@ -15,6 +33,7 @@ def _search_units(repo, criteria_list, content_type_cls, batch_size_override=Non
     """
     units = set()
     batch_size = batch_size_override or BATCH_SIZE
+    unit_fields = UNIT_FIELDS.get(content_type_cls, None)
 
     def handle_results(page):
         for unit in page.data:
@@ -32,7 +51,7 @@ def _search_units(repo, criteria_list, content_type_cls, batch_size_override=Non
 
     for criteria_batch in criteria_split:
         _criteria = Criteria.and_(
-            Criteria.with_unit_type(content_type_cls),
+            Criteria.with_unit_type(content_type_cls, unit_fields=unit_fields),
             Criteria.or_(*criteria_batch),
         )
 
