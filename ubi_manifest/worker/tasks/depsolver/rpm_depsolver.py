@@ -251,6 +251,11 @@ class Depsolver:
                     self.srpm_output_set.add(srpm)
                     seen_srpm_filenames.add(srpm.filename)
 
+        # log warnings if depsolving failed
+        deps_not_found = self._requires - self._provides
+        if deps_not_found:
+            self._log_warnings(deps_not_found, pulp_repos, merged_blacklist)
+
     def _batch_size(self):
         if len(self._unsolved) < BATCH_SIZE_RESOLVER:
             batch_size = len(self._unsolved)
@@ -270,3 +275,39 @@ class Depsolver:
                 out.setdefault(item.associate_source_repo_id, []).append(item)
 
         return out
+
+    def _log_warnings(self, deps_not_found, pulp_repos, merged_blacklist):
+        """
+        Log failed depsolving. We print out the rpms whose direct dependencies
+        could not be included in output set.
+        """
+        input_repos = [x.id for x in pulp_repos]
+
+        # To determine if dep is missing due to being blacklisted
+        def _is_blacklisted_by_rule(item, rule):
+            if rule.globbing:
+                return item.startswith(rule.name)
+            return item == rule.name
+
+        # Get rpms depending on missing dependencies
+        for item in deps_not_found:
+            depending_rpms = list(
+                rpm.filename
+                for rpm in self.output_set
+                if item in map(lambda x: x.name, rpm.requires)
+            )
+
+            # Divide missing dependencies blacklisted and all others
+            if any((_is_blacklisted_by_rule(item, rule) for rule in merged_blacklist)):
+                _LOG.warning(
+                    "Failed depsolving: %s is blacklisted. These rpms depend on it %s",
+                    item,
+                    sorted(depending_rpms),
+                )
+            else:
+                _LOG.warning(
+                    "Failed depsolving: %s can not be found in these input repos: %s. These rpms depend on it %s",
+                    item,
+                    input_repos,
+                    sorted(depending_rpms),
+                )
