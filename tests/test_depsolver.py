@@ -194,7 +194,7 @@ def test_run(pulp):
     blacklist_1 = [PackageToExclude("lib_exclude")]
     blacklist_2 = [PackageToExclude("base_pkg_to_exclude")]
 
-    whitelist_1 = ["gcc", "jq"]
+    whitelist_1 = ["gcc", "jq", "perl-version"]
     dep_item_1 = DepsolverItem(
         whitelist=whitelist_1,
         blacklist=blacklist_1,
@@ -413,7 +413,7 @@ def _prepare_test_data(pulp):
     # unit_11a/b are modular units, both of them has to be added to the output set
     # because they're listed on some module's artifacts
     unit_11a = RpmUnit(
-        name="perl",
+        name="perl-version",
         filename="perl-version-1.99.24-441.module+el8.4.0+9911+7f269185.x86_64.rpm",
         version="1.99.24",
         release="441.module+el8.4.0+9911+7f269185",
@@ -426,10 +426,22 @@ def _prepare_test_data(pulp):
     )
 
     unit_11b = RpmUnit(
-        name="perl",
+        name="perl-version",
         filename="perl-version-0.99.24-441.module+el8.3.0+6718+7f269185.x86_64.rpm",
         version="0.99.24",
         release="441.module+el8.3.0+6718+7f269185",
+        epoch="0",
+        arch="x86_64",
+        provides=[],
+        requires=[],
+    )
+
+    # 11c package is non-modular variant of 11a/b that needs to be in the output set
+    unit_11c = RpmUnit(
+        name="perl-version",
+        filename="perl-version-0-1.x86_64.rpm",
+        version="0",
+        release="1",
         epoch="0",
         arch="x86_64",
         provides=[],
@@ -458,7 +470,7 @@ def _prepare_test_data(pulp):
         content_type_id="srpm",
     )
 
-    repo_1_units = [unit_1, unit_2, unit_5, unit_11a, unit_11b, unit_12]
+    repo_1_units = [unit_1, unit_2, unit_5, unit_11a, unit_11b, unit_11c, unit_12]
     repo_2_units = [unit_3, unit_4, unit_6]
     repo_srpm_units = [unit_9, unit_10, unit_13]
 
