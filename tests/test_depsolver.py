@@ -1,5 +1,6 @@
 import pytest
 from pubtools.pulplib import ModulemdUnit, RpmDependency, RpmUnit
+from testfixtures import LogCapture
 
 from ubi_manifest.worker.tasks.depsolver.models import DepsolverItem, PackageToExclude
 from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import (
@@ -191,7 +192,10 @@ def test_run(pulp):
     """test the main method of depsolver"""
     repos, repo_srpm, expected_output_set = _prepare_test_data(pulp)
 
-    blacklist_1 = [PackageToExclude("lib_exclude")]
+    blacklist_1 = [
+        PackageToExclude("lib_exclude"),
+        PackageToExclude("blacklisted-", globbing=True),
+    ]
     blacklist_2 = [PackageToExclude("base_pkg_to_exclude")]
 
     whitelist_1 = ["gcc", "jq", "perl-version"]
@@ -218,52 +222,77 @@ def test_run(pulp):
         "perl-version-0.99.24-441.module+el8.3.0+6718+7f269185.x86_64.rpm",
     }
 
-    with Depsolver([dep_item_1, dep_item_2], [repo_srpm], module_rpms) as depsolver:
-        depsolver.run()
+    with LogCapture() as mock_log:
+        with Depsolver([dep_item_1, dep_item_2], [repo_srpm], module_rpms) as depsolver:
+            depsolver.run()
 
-        # check internal state of depsolver object
-        # provides set holds all capabilities that we went through during depsolving
-        assert depsolver._provides == {
-            "gcc",
-            "jq",
-            "apr",
-            "babel",
-            "lib.a",
-            "lib.b",
-            "lib.c",
-            "lib.d",
-            "lib.e",
-            "lib.f",
-            "lib.z",
-        }
+            # check internal state of depsolver object
+            # provides set holds all capabilities that we went through during depsolving
+            assert depsolver._provides == {
+                "gcc",
+                "jq",
+                "apr",
+                "babel",
+                "lib.a",
+                "lib.b",
+                "lib.c",
+                "lib.d",
+                "lib.e",
+                "lib.f",
+                "lib.z",
+            }
 
-        # requires set holds all requires that we went through during depsolving
-        assert depsolver._requires == {
-            "lib.a",
-            "lib.b",
-            "lib.c",
-            "lib.d",
-            "lib.e",
-            "lib.g",
-            "lib_exclude",
-            "lib.z",
-        }
+            # requires set holds all requires that we went through during depsolving
+            assert depsolver._requires == {
+                "blacklisted-package",
+                "lib.a",
+                "lib.b",
+                "lib.c",
+                "lib.d",
+                "lib.e",
+                "lib.g",
+                "lib_exclude",
+                "lib.z",
+            }
 
-        # unsolved set should be empty after depsolving finishes
-        # it will be emptied even if we have unsolvable dependency
-        assert len(depsolver._unsolved) == 0
+            # unsolved set should be empty after depsolving finishes
+            # it will be emptied even if we have unsolvable dependency
+            assert len(depsolver._unsolved) == 0
 
-        # there are unsolved requires, we can get those by
-        unsolved = depsolver._requires - depsolver._provides
-        # there is exactly two unresolved deps, lib_exclude is unsolved due to blacklisting
-        assert unsolved == {"lib.g", "lib_exclude"}
+            # there are unsolved requires, we can get those by
+            unsolved = depsolver._requires - depsolver._provides
+            # there is exactly two unresolved deps, lib_exclude is unsolved due to blacklisting
+            assert unsolved == {"lib.g", "lib_exclude", "blacklisted-package"}
 
-        # checking correct rpm and srpm names and its associate source repo id
-        output = [
-            (item.name, item.associate_source_repo_id)
-            for item in depsolver.output_set | depsolver.srpm_output_set
-        ]
-        assert sorted(output) == expected_output_set
+            # checking correct rpm and srpm names and its associate source repo id
+            output = [
+                (item.name, item.associate_source_repo_id)
+                for item in depsolver.output_set | depsolver.srpm_output_set
+            ]
+            assert sorted(output) == expected_output_set
+
+            # Check logs produced by failed depsolving
+            mock_log.check_present(
+                (
+                    "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
+                    "WARNING",
+                    "Failed depsolving: lib.g can not be found in these input repos:"
+                    " ['test_repo_1', 'test_repo_2']. These rpms depend on it ['lib-x-100-200.x86_64.rpm']",
+                ),
+                (
+                    "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
+                    "WARNING",
+                    "Failed depsolving: lib_exclude is blacklisted. These rpms depend on it"
+                    " ['lib-x-100-200.x86_64.rpm', 'lib-y-100-200.x86_64.rpm']",
+                ),
+                (
+                    "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
+                    "WARNING",
+                    "Failed depsolving: blacklisted-package is blacklisted."
+                    " These rpms depend on it ['lib-y-100-200.x86_64.rpm']",
+                ),
+                order_matters=False,
+            )
 
 
 def _prepare_test_data(pulp):
@@ -325,6 +354,7 @@ def _prepare_test_data(pulp):
         release="200",
         epoch="1",
         arch="x86_64",
+        filename="lib-x-100-200.x86_64.rpm",
         provides=[RpmDependency(name="lib.c"), RpmDependency(name="lib.d")],
         requires=[
             RpmDependency(name="lib.e"),
@@ -340,8 +370,12 @@ def _prepare_test_data(pulp):
         epoch="1",
         arch="x86_64",
         provides=[RpmDependency(name="lib.e"), RpmDependency(name="lib.f")],
-        requires=[],
+        requires=[
+            RpmDependency(name="lib_exclude"),
+            RpmDependency(name="blacklisted-package"),
+        ],
         sourcerpm="lib-y.src.rpm",
+        filename="lib-y-100-200.x86_64.rpm",
     )
 
     unit_7 = RpmUnit(
@@ -470,13 +504,23 @@ def _prepare_test_data(pulp):
         content_type_id="srpm",
     )
 
+    unit_14 = RpmUnit(
+        name="blacklisted-package",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[],
+        requires=[],
+    )
+
     repo_1_units = [unit_1, unit_2, unit_5, unit_11a, unit_11b, unit_11c, unit_12]
     repo_2_units = [unit_3, unit_4, unit_6]
     repo_srpm_units = [unit_9, unit_10, unit_13]
 
     pulp.insert_units(repo_1, repo_1_units + [md_unit_1, md_unit_2])
     pulp.insert_units(
-        repo_2, repo_2_units + [unit_7, unit_8]
+        repo_2, repo_2_units + [unit_7, unit_8, unit_14]
     )  # add extra units, that will be excluded by blacklist
 
     pulp.insert_units(repo_srpm, repo_srpm_units)
