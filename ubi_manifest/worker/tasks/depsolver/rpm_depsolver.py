@@ -21,7 +21,9 @@ _LOG = logging.getLogger(__name__)
 
 # need to set significantly lower batches for general rpm search
 # otherwise db may very likely hit OOM error.
-BATCH_SIZE_RPM = int(os.getenv("UBI_MANIFEST_BATCH_SIZE_RPM", "15"))
+BATCH_SIZE_RPM = int(os.getenv("UBI_MANIFEST_BATCH_SIZE_RPM", "25"))
+# limit for batch of specific search of rpms (e.g. via filename)
+BATCH_SIZE_RPM_SPECIFIC = int(os.getenv("UBI_MANIFEST_BATCH_SIZE_RPM_SPECIFIC", "500"))
 BATCH_SIZE_RESOLVER = int(os.getenv("UBI_MANIFEST_BATCH_SIZE_RESOLVER", "150"))
 MAX_WORKERS = int(os.getenv("UBI_MANIFEST_DEPSOLVER_WORKERS", "8"))
 
@@ -89,7 +91,7 @@ class Depsolver:
         crit = create_or_criteria(["filename"], [(rpm,) for rpm in pkgs_list])
 
         content = f_proxy(
-            self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
+            self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM_SPECIFIC)
         )
         return content
 
@@ -146,7 +148,9 @@ class Depsolver:
         )
 
         content = f_proxy(
-            self._executor.submit(search_rpms, crit, self._srpm_repos, BATCH_SIZE_RPM)
+            self._executor.submit(
+                search_rpms, crit, self._srpm_repos, BATCH_SIZE_RPM_SPECIFIC
+            )
         )
 
         return {rpm for rpm in content if not _is_blacklisted(rpm, blacklist)}
