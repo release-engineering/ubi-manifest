@@ -2,7 +2,11 @@ import pytest
 from pubtools.pulplib import ModulemdUnit, RpmDependency, RpmUnit
 from testfixtures import LogCapture
 
-from ubi_manifest.worker.tasks.depsolver.models import DepsolverItem, PackageToExclude
+from ubi_manifest.worker.tasks.depsolver.models import (
+    DepsolverItem,
+    PackageToExclude,
+    UbiUnit,
+)
 from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import (
     BATCH_SIZE_RESOLVER,
     Depsolver,
@@ -532,3 +536,63 @@ def _prepare_test_data(pulp):
     )
 
     return [repo_1, repo_2], repo_srpm, sorted(expected_output_set)
+
+
+def test_export():
+    """
+    Tests that exported units from depsolver includes identical rpms, if they come
+    from different repos.
+    """
+    depsolver = Depsolver(None, None, None)
+
+    rpm = RpmUnit(
+        name="test",
+        filename="test-1.rpm",
+        version="0",
+        release="0",
+        epoch="1",
+        arch="x86_64",
+    )
+    srpm = RpmUnit(
+        name="test",
+        filename="test-1.src.rpm",
+        version="0",
+        release="0",
+        epoch="1",
+        arch="x86_64",
+    )
+
+    # identical rpm - two times from repo test_repo_1, one in test_repo_2
+    unit_1 = UbiUnit(rpm, "test_repo_1")
+    unit_2 = UbiUnit(rpm, "test_repo_1")
+    unit_3 = UbiUnit(rpm, "test_repo_2")
+
+    # identical srpm - two times from repo test_repo_3, one in test_repo_4
+    unit_4 = UbiUnit(srpm, "test_repo_3")
+    unit_5 = UbiUnit(srpm, "test_repo_3")
+    unit_6 = UbiUnit(srpm, "test_repo_4")
+
+    depsolver.output_set = set([unit_1, unit_2, unit_3])
+    depsolver.srpm_output_set = set([unit_4, unit_5, unit_6])
+
+    # export output_set from depsolver
+    exported = depsolver.export()
+
+    # check that:
+    # 1. there are only unique s/rpms for one repo
+    # 2. it's allowed to have identical rpms from different repos
+    rpms = exported["test_repo_1"]
+    assert len(rpms) == 1
+    assert rpms[0]._unit is rpm
+
+    rpms = exported["test_repo_2"]
+    assert len(rpms) == 1
+    assert rpms[0]._unit is rpm
+
+    rpms = exported["test_repo_3"]
+    assert len(rpms) == 1
+    assert rpms[0]._unit is srpm
+
+    rpms = exported["test_repo_4"]
+    assert len(rpms) == 1
+    assert rpms[0]._unit is srpm

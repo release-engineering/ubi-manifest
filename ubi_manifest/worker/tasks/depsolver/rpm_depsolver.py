@@ -246,14 +246,10 @@ class Depsolver:
             ft = self._executor.submit(self.get_source_pkgs, resolved, merged_blacklist)
             source_rpm_fts.append(ft)
 
-        # wait for srpm queries and deduplicate the output set
-        # one SRPM can be shared with more than one binary/debug RPM
-        seen_srpm_filenames = set()
+        # wait for srpm queries and store them the output set
         for srpm_content in as_completed(source_rpm_fts):
             for srpm in srpm_content.result():
-                if srpm.filename not in seen_srpm_filenames:
-                    self.srpm_output_set.add(srpm)
-                    seen_srpm_filenames.add(srpm.filename)
+                self.srpm_output_set.add(srpm)
 
         # log warnings if depsolving failed
         deps_not_found = self._requires - self._provides
@@ -270,12 +266,18 @@ class Depsolver:
 
     def export(self):
         out = {}
-        # set of unique filenames
-        filenames = set()
+        # set of unique tuples (filename, repo_id)
+        filename_repo_tuples = set()
         for item in self.output_set | self.srpm_output_set:
-            # deduplicate output sets
-            if item.filename not in filenames:
-                filenames.add(item.filename)
+            # deduplicate output sets, but keep identical rpms that have different repository
+            # we can't easily decide which one we should keep/discard.
+            # one SRPM can be shared with more than one binary/debug RPM
+            # one debug RPM may be related with more binary RPMs
+            if (
+                item.filename,
+                item.associate_source_repo_id,
+            ) not in filename_repo_tuples:
+                filename_repo_tuples.add((item.filename, item.associate_source_repo_id))
                 out.setdefault(item.associate_source_repo_id, []).append(item)
 
         return out
