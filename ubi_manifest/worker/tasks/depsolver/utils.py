@@ -12,6 +12,10 @@ from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude
 
 _LOG = getLogger(__name__)
 
+OPEN_END_ONE_OR_MORE_PAR_REGEX = re.compile(r"^\(+|\)+$")
+OPERATOR_BOOL_REGEX = re.compile(r"if|else|and|or|unless|with|without")
+OPERATOR_NUM_REGEX = re.compile(r"<|<=|=|>|>=")
+
 
 def make_pulp_client(url, username, password, insecure):
     auth = None
@@ -91,40 +95,35 @@ def get_n_latest_from_content(content, blacklist, modular_rpms=None):
 
 
 def parse_bool_deps(bool_dependency):
-    """Parses bool/rich dependency clause and returns set of names of packages"""
-    # remove all paranthesis from clause
-    _dep = re.sub(r"\(|\)", "", bool_dependency)
-    to_parse = _dep.split()
+    """Parses boolean/rich dependency clause and returns set of names of packages"""
+    to_parse = bool_dependency.split()
 
-    operators = set(
-        [
-            "if",
-            "else",
-            "and",
-            "or",
-            "unless",
-            "with",
-            "without",
-        ]
-    )
-
-    operator_num = set(["<", "<=", "=", ">", ">="])
     skip_next = False
     pkg_names = set()
-    # nested = 0
+
     for item in to_parse:
-        # skip item imediately apearing after num operator
+        # skip item immediately apearing after num operator
         if skip_next:
             skip_next = False
             continue
         # skip operator
-        if item in operators:
+        if re.match(OPERATOR_BOOL_REGEX, item):
             continue
 
         # after num operator there is usually evr, we want to skip that as well
-        if item in operator_num:
+        if re.match(OPERATOR_NUM_REGEX, item):
             skip_next = True
             continue
+        # remove all starting and ending paranthesis there can some left when using nesting
+        item = re.sub(OPEN_END_ONE_OR_MORE_PAR_REGEX, "", item)
+        # after all substitutions we ended with empty string, continue to the next item
+        if not item:
+            continue
+        # if there is wanted opening parenthesis in item, let's add ending parenthesis
+        # which we removed in the previous step
+        # in order not to brake the item name
+        if "(" in item:
+            item += ")"
 
         pkg_names.add(item)
     return pkg_names

@@ -300,6 +300,16 @@ def test_get_n_latest_from_content_skip_modular_rpms():
         ),
         # extra case for multiple appearance of the same package
         ("(pkgA < 1 or (pkgA >= 1 or pkgB) or pkgB > 2.4)", {"pkgA", "pkgB"}),
+        # extra case #2 with nesting and valid paranthesis in dep.
+        (
+            "((pkgA(xxx) >= 0.1.2 with capB) or (pkgB <= 3.4.5 without capA))",
+            {"pkgA(xxx)", "capB", "pkgB", "capA"},
+        ),
+        # case with extra spaces and parentheses
+        (
+            "(    ((( pkgA(xxx) >= 0.1.2 with capA    )))     )",
+            {"pkgA(xxx)", "capA"},
+        ),
     ],
 )
 def test_parse_bool_deps(clause, result):
