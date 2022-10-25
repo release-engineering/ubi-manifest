@@ -257,6 +257,8 @@ def test_run(pulp):
                 "lib.g",
                 "lib_exclude",
                 "lib.z",
+                "pkgX(abc)",
+                "capY(xyz)",
             }
 
             # unsolved set should be empty after depsolving finishes
@@ -266,7 +268,13 @@ def test_run(pulp):
             # there are unsolved requires, we can get those by
             unsolved = depsolver._requires - depsolver._provides
             # there is exactly two unresolved deps, lib_exclude is unsolved due to blacklisting
-            assert unsolved == {"lib.g", "lib_exclude", "blacklisted-package"}
+            assert unsolved == {
+                "pkgX(abc)",
+                "capY(xyz)",
+                "lib.g",
+                "lib_exclude",
+                "blacklisted-package",
+            }
 
             # checking correct rpm and srpm names and its associate source repo id
             output = [
@@ -294,6 +302,18 @@ def test_run(pulp):
                     "WARNING",
                     "Failed depsolving: blacklisted-package is blacklisted."
                     " These rpms depend on it ['lib-y-100-200.x86_64.rpm']",
+                ),
+                (
+                    "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
+                    "WARNING",
+                    "Failed depsolving: pkgX(abc) can not be found in these input repos:"
+                    " ['test_repo_1', 'test_repo_2']. These rpms depend on it ['lib-x-100-200.x86_64.rpm']",
+                ),
+                (
+                    "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
+                    "WARNING",
+                    "Failed depsolving: capY(xyz) can not be found in these input repos:"
+                    " ['test_repo_1', 'test_repo_2']. These rpms depend on it ['lib-x-100-200.x86_64.rpm']",
                 ),
                 order_matters=False,
             )
@@ -363,6 +383,7 @@ def _prepare_test_data(pulp):
         requires=[
             RpmDependency(name="lib.e"),
             RpmDependency(name="lib.g"),
+            RpmDependency(name="( pkgX(abc) with capY(xyz) )"),
             RpmDependency(name="lib_exclude"),
         ],
     )

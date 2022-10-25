@@ -295,12 +295,21 @@ class Depsolver:
                 return item.startswith(rule.name)
             return item == rule.name
 
+        def _requires_names(requires):
+            out = set()
+            for item in requires:
+                if item.name.startswith("("):
+                    out |= parse_bool_deps(item.name)
+                else:
+                    out.add(item.name)
+            return out
+
         # Get rpms depending on missing dependencies
         for item in deps_not_found:
             depending_rpms = list(
                 rpm.filename
                 for rpm in self.output_set
-                if item in map(lambda x: x.name, rpm.requires)
+                if item in _requires_names(rpm.requires)
             )
 
             # Divide missing dependencies blacklisted and all others
