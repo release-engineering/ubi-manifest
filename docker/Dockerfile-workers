@@ -4,7 +4,7 @@ LABEL maintainer="Red Hat - EXD"
 
 WORKDIR /src
 
-# Switch to priviledged user to install rpm-devel
+# Switch to priviledged user to install dependencies and application
 USER 0
 
 # Enable CentOS repos, as rpm-devel is not in RHEL repos
@@ -21,11 +21,11 @@ COPY ./conf/app.conf /etc/ubi_manifest/app.conf
 COPY ./conf/certs/* /etc/pki/ca-trust/source/anchors/
 RUN update-ca-trust extract
 
-# Switch back to unpriviledged user
-USER 1001
-
 COPY . .
 
 RUN pip3 install .
+
+# Switch back to unpriviledged user to run the application
+USER 1001
 
 CMD celery -A ubi_manifest.worker.tasks worker --loglevel=debug

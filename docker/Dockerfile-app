@@ -4,7 +4,7 @@ LABEL maintainer="Red Hat - EXD"
 
 WORKDIR /src
 
-# Switch to priviledged user to install rpm-devel
+# Switch to priviledged user to install dependencies and application
 USER 0
 
 # Enable CentOS repos, as rpm-devel is not in RHEL repos
@@ -17,13 +17,13 @@ RUN yum install -y --disableplugin=subscription-manager rpm-devel
 # copy config
 COPY ./conf/app.conf /etc/ubi_manifest/app.conf
 
-# Switch back to unpriviledged user
-USER 1001
-
 COPY . .
 
 RUN pip3 install "uvicorn[standard]" gunicorn
 RUN pip3 install .
+
+# Switch back to unpriviledged user to run the application
+USER 1001
 
 EXPOSE 8000
 
