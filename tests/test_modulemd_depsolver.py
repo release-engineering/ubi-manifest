@@ -153,7 +153,6 @@ def test_run(pulp):
 
 
 def _prepare_pulp(pulp):
-
     # Define mock repos
     repo_1 = create_and_insert_repo(id="test_repo_1", pulp=pulp)
 

@@ -39,7 +39,6 @@ def create_or_criteria(fields, values):
         if len(val_tuple) != len(fields):
             raise ValueError
         for index, field in enumerate(fields):
-
             inner_and_criteria.append(Criteria.with_field(field, val_tuple[index]))
 
         or_criteria.append(Criteria.and_(*inner_and_criteria))

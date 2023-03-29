@@ -3,18 +3,18 @@ name: Tox tests
 on: [push, pull_request]
 
 jobs:
-  py39:
+  py311:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.9"
+          python-version: "3.11"
       - name: Install Tox
         run: pip install tox
       - name: Run Tox
-        run: tox -e py39
+        run: tox -e py311
   py310:
     runs-on: ubuntu-latest
     steps:
@@ -27,6 +27,18 @@ jobs:
         run: pip install tox
       - name: Run Tox
         run: tox -e py310
+  py39:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install Tox
+        run: pip install tox
+      - name: Run Tox
+        run: tox -e py39
   static:
     runs-on: ubuntu-latest
     steps:
@@ -46,7 +58,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - name: Install Tox
         run: pip install tox
       - name: Run Tox

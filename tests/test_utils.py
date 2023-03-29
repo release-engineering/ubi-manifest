@@ -405,7 +405,6 @@ def test_parse_blacklist():
 
 
 def test_get_modulemd_output_set():
-
     # Define mock UbiUnits
 
     # two perl-YAML units with different versions, keep the highest version one
