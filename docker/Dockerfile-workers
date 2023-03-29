@@ -23,6 +23,7 @@ RUN update-ca-trust extract
 
 COPY . .
 
+RUN pip3 install -U pip
 RUN pip3 install .
 
 # Switch back to unpriviledged user to run the application
