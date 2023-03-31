@@ -35,7 +35,6 @@ class Depsolver:
         srpm_repos,
         modulemd_dependencies: Set[str],
     ) -> None:
-
         self.repos: List[DepsolverItem] = repos
         self.modulemd_dependencies: Set[str] = modulemd_dependencies
         self.output_set: Set[UbiUnit] = set()
