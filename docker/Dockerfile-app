@@ -19,6 +19,7 @@ COPY ./conf/app.conf /etc/ubi_manifest/app.conf
 
 COPY . .
 
+RUN pip3 install -U pip
 RUN pip3 install "uvicorn[standard]" gunicorn
 RUN pip3 install .
 
