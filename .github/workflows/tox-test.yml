@@ -47,6 +47,10 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
+      - name: Install RPM
+        run: |
+          sudo apt-get install -y rpm
+          sudo apt-get install -y libkrb5-dev
       - name: Install Tox
         run: pip install tox
       - name: Run Tox
