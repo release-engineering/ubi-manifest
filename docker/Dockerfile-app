@@ -19,7 +19,8 @@ COPY ./conf/app.conf /etc/ubi_manifest/app.conf
 
 COPY . .
 
-RUN pip3 install -U pip
+# install specific version of pip due to installation issue with rpm-py-installer
+RUN pip3 install pip==23.0.1
 RUN pip3 install "uvicorn[standard]" gunicorn
 RUN pip3 install .
 

@@ -23,7 +23,8 @@ RUN update-ca-trust extract
 
 COPY . .
 
-RUN pip3 install -U pip
+# install specific version of pip due to installation issue with rpm-py-installer
+RUN pip3 install pip==23.0.1
 RUN pip3 install .
 
 # Switch back to unpriviledged user to run the application

@@ -12,7 +12,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install Tox
-        run: pip install tox
+        run: pip install tox 'virtualenv<20.21.1'
       - name: Run Tox
         run: tox -e py311
   py310:
@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: "3.10"
       - name: Install Tox
-        run: pip install tox
+        run: pip install tox 'virtualenv<20.21.1'
       - name: Run Tox
         run: tox -e py310
   py39:
@@ -36,7 +36,7 @@ jobs:
         with:
           python-version: "3.9"
       - name: Install Tox
-        run: pip install tox
+        run: pip install tox 'virtualenv<20.21.1'
       - name: Run Tox
         run: tox -e py39
   static:
@@ -48,7 +48,7 @@ jobs:
         with:
           python-version: "3.10"
       - name: Install Tox
-        run: pip install tox
+        run: pip install tox 'virtualenv<20.21.1'
       - name: Run Tox
         run: tox -e static
   coverage:
@@ -60,7 +60,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install Tox
-        run: pip install tox
+        run: pip install tox 'virtualenv<20.21.1'
       - name: Run Tox
         run: tox -e cov
       - name: Install pytest cov
