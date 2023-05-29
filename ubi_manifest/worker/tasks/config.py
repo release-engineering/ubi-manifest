@@ -2,7 +2,7 @@ import configparser
 import json
 import os
 import re
-from typing import List
+from typing import List, Union
 
 from attrs import define
 
@@ -12,7 +12,9 @@ class Config:
     pulp_url: str = "some_url"
     pulp_username: str = "username"
     pulp_password: str = "pass"
-    pulp_insecure: bool = False
+    pulp_cert: str = "path/to/cert"
+    pulp_key: str = "path/to/key"
+    pulp_verify: Union[bool, str] = True
     ubi_config_url: str = "some_url"
     allowed_ubi_repo_groups: dict = {"group1": ["repo_1", "repo_2"]}
     imports: List[str] = ["ubi_manifest.worker.tasks.depsolve"]
