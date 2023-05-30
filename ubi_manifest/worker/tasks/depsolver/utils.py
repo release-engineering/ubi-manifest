@@ -1,3 +1,4 @@
+import os
 import re
 from collections import defaultdict, deque
 from itertools import chain
@@ -17,13 +18,20 @@ OPERATOR_BOOL_REGEX = re.compile(r"if|else|and|or|unless|with|without")
 OPERATOR_NUM_REGEX = re.compile(r"<|<=|=|>|>=")
 
 
-def make_pulp_client(url, username, password, insecure):
-    auth = None
+def make_pulp_client(config):
+    kwargs = {
+        "verify": config.get("pulp_verify"),
+    }
 
-    if username:
-        auth = (username, password)
+    cert, key = config.get("pulp_cert"), config.get("pulp_key")
+    # check cert/key for presence, if present assume cert/key for pulp auth
+    if os.path.isfile(cert) and os.path.isfile(key):
+        kwargs["cert"] = (cert, key)
+    # if cert/key not present, use user/pass auth to pulp
+    else:
+        kwargs["auth"] = (config.get("pulp_username"), config.get("pulp_password"))
 
-    return Client(url, auth=auth, verify=not insecure)
+    return Client(config.get("pulp_url"), **kwargs)
 
 
 def create_or_criteria(fields, values):

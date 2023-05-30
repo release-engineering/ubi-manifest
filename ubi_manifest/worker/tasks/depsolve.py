@@ -38,12 +38,7 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
     """
     ubi_config_loader = UbiConfigLoader(app.conf["ubi_config_url"])
 
-    with make_pulp_client(
-        app.conf["pulp_url"],
-        app.conf["pulp_username"],
-        app.conf["pulp_password"],
-        app.conf["pulp_insecure"],
-    ) as client:
+    with make_pulp_client(app.conf) as client:
         repos_map = {}
         debuginfo_dep_map = {}
         dep_map = {}

@@ -1,4 +1,5 @@
 from attrs import define
+from tempfile import NamedTemporaryFile
 from pubtools.pulplib import Client, ModulemdUnit, RpmUnit, YumRepository
 
 from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
@@ -18,16 +19,38 @@ from .utils import create_and_insert_repo
 
 def test_make_pulp_client():
     config = {
-        "url": "https://fake.pulp.com",
-        "username": "test_user",
-        "password": "test_pass",
-        "insecure": True,
+        "pulp_url": "https://fake.pulp.com",
+        "pulp_username": "test_user",
+        "pulp_password": "test_pass",
+        "pulp_cert": "path/to/cert",
+        "pulp_key": "path/to/key",
+        "pulp_verify": False,
     }
-    with make_pulp_client(**config) as client:
-        client = make_pulp_client(**config)
 
-        # Client instance is prperly created with no errors
+    with make_pulp_client(config) as client:
+        # Client instance is properly created with no errors
         assert isinstance(client, Client)
+
+
+def test_make_pulp_client_with_cert_key():
+    config = {
+        "pulp_url": "https://fake.pulp.com",
+        "pulp_username": "test_user",
+        "pulp_password": "test_pass",
+        "pulp_cert": "",
+        "pulp_key": "",
+        "pulp_verify": False,
+    }
+    with NamedTemporaryFile() as cert, NamedTemporaryFile() as key:
+        cert_path = cert.name
+        key_path = key.name
+
+        config["pulp_cert"] = cert_path
+        config["pulp_key"] = key_path
+
+        with make_pulp_client(config) as client:
+            # Client instance is properly created with no errors
+            assert isinstance(client, Client)
 
 
 def test_search_rpms(pulp):

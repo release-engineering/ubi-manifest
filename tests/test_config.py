@@ -20,6 +20,8 @@ def test_make_config():
         # let's assert other keys
         assert celery_app.conf["pulp_username"] == "xxx"
         assert celery_app.conf["pulp_password"] == "yyy"
+        assert celery_app.conf["pulp_cert"] == "path/to/pulp_cert"
+        assert celery_app.conf["pulp_key"] == "path/to/pulp_key"
         assert (
             celery_app.conf["ubi_config_url"] == "https://gitlab.foo.bar.com/ubi-config"
         )
