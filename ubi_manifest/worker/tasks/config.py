@@ -15,8 +15,8 @@ class Config:
     pulp_cert: str = "path/to/cert"
     pulp_key: str = "path/to/key"
     pulp_verify: Union[bool, str] = True
-    ubi_config_url: str = "some_url"
-    allowed_ubi_repo_groups: dict = {"group1": ["repo_1", "repo_2"]}
+    content_config: dict = {"group_prefix": "url_to_config_repository"}
+    allowed_ubi_repo_groups: dict = {"group_prefix1": ["repo_1", "repo_2"]}
     imports: List[str] = ["ubi_manifest.worker.tasks.depsolve"]
     broker_url: str = "redis://redis:6379/0"
     result_backend: str = "redis://redis:6379/0"
@@ -30,13 +30,12 @@ def make_config(celery_app):
     config_from_file = configparser.ConfigParser()
     config_from_file.read(config_file)
     try:
-        repo_groups_str = (
-            config_from_file["CONFIG"].pop("allowed_ubi_repo_groups") or ""
-        )
-        repo_groups_str = re.sub(r"[\s]+", "", repo_groups_str)
-        repo_groups = json.loads(repo_groups_str)
         conf_dict = dict(config_from_file["CONFIG"])
-        conf_dict["allowed_ubi_repo_groups"] = repo_groups
+        for conf_field in ("allowed_ubi_repo_groups", "content_config"):
+            conf_item_str = config_from_file["CONFIG"].pop(conf_field) or ""
+            conf_item = json.loads(re.sub(r"[\s]+", "", conf_item_str))
+            conf_dict[conf_field] = conf_item
+
         config = Config(**conf_dict)
     except KeyError:
         config = Config()

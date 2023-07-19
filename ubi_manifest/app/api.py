@@ -62,8 +62,14 @@ def manifest_post(depsolve_item: DepsolveItem) -> List[TaskState]:
         )
 
     tasks_states = []
-    for repo_group in repo_groups.values():
-        task = depsolve_task.apply_async(args=[repo_group])
+    for repo_group_key, repo_group in repo_groups.items():
+        content_config_url = None
+        for group_prefix, url in app.conf.content_config.items():
+            if repo_group_key.startswith(group_prefix):
+                content_config_url = url
+                break
+
+        task = depsolve_task.apply_async(args=[repo_group, content_config_url])
         tasks_states.append(TaskState(task_id=task.task_id, state=task.state))
 
     return tasks_states

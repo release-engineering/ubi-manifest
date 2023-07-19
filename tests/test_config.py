@@ -22,9 +22,9 @@ def test_make_config():
         assert celery_app.conf["pulp_password"] == "yyy"
         assert celery_app.conf["pulp_cert"] == "path/to/pulp_cert"
         assert celery_app.conf["pulp_key"] == "path/to/pulp_key"
-        assert (
-            celery_app.conf["ubi_config_url"] == "https://gitlab.foo.bar.com/ubi-config"
-        )
+        assert celery_app.conf["content_config"] == {
+            "ubi": "https://gitlab.foo.bar.com/ubi-config"
+        }
         assert celery_app.conf["allowed_ubi_repo_groups"] == {
             "ubiX:test": ["repo_1", "repo_2", "repo_3"]
         }

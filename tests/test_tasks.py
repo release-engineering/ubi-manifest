@@ -141,7 +141,7 @@ def test_depsolve_task(pulp):
 
                 client.return_value = pulp.client
                 # let run the depsolve task
-                result = depsolve.depsolve_task(["ubi_repo"])
+                result = depsolve.depsolve_task(["ubi_repo"], "fake-url")
                 # we don't return anything useful, everything is saved in redis
                 assert result is None
 
@@ -265,7 +265,7 @@ def test_depsolve_task_empty_manifests(pulp):
 
                 client.return_value = pulp.client
                 # let run the depsolve task
-                result = depsolve.depsolve_task(["ubi_repo"])
+                result = depsolve.depsolve_task(["ubi_repo"], "fake-url")
                 # we don't return anything useful, everything is saved in redis
                 assert result is None
 
