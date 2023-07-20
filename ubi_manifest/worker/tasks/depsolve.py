@@ -25,7 +25,7 @@ _LOG = logging.getLogger(__name__)
 
 
 @app.task
-def depsolve_task(ubi_repo_ids: List[str]) -> None:
+def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
     """
     Run depsolvers for given ubi_repo_ids - it's expected that id of binary
     repositories are provided. Debuginfo and SRPM repos related to those ones
@@ -36,7 +36,7 @@ def depsolve_task(ubi_repo_ids: List[str]) -> None:
     (source_repo_id, unit_type, unit_attr, value). Note that value in redis
     is stored as json string.
     """
-    ubi_config_loader = UbiConfigLoader(app.conf["ubi_config_url"])
+    ubi_config_loader = UbiConfigLoader(content_config_url)
 
     with make_pulp_client(app.conf) as client:
         repos_map = {}
