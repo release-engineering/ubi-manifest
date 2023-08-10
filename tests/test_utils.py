@@ -7,6 +7,7 @@ from pubtools.pulplib import (
     ModulemdDependency,
     ModulemdUnit,
     RpmUnit,
+    RpmDependency,
 )
 
 from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
@@ -22,9 +23,10 @@ from ubi_manifest.worker.tasks.depsolver.utils import (
     parse_bool_deps,
     split_filename,
     vercmp_sort,
+    is_requirement_resolved,
 )
 
-from .utils import MockLoader
+from .utils import MockLoader, rpmdeps_from_names
 
 
 def get_ubi_unit(klass, repo_id, **kwargs):
@@ -317,7 +319,7 @@ def test_parse_bool_deps(clause, result):
     test parsing bool/rich dependencies, the function extracts only names of packages
     """
     parsed = parse_bool_deps(clause)
-    assert parsed == result
+    assert parsed == rpmdeps_from_names(*result)
 
 
 def test_create_or_criteria():
@@ -481,3 +483,126 @@ def test_get_criteria_for_modules():
         [("perl", "5.30"), ("perl", "6.30"), ("perl-YAML", Matcher.exists())],
     )
     criteria = get_criteria_for_modules([unit1, unit2, unit3])
+
+
+@pytest.mark.parametrize(
+    "requirement, provider, expected_result",
+    [
+        # no flags
+        (RpmDependency(name="test-dep"), RpmDependency(name="test-dep"), True),
+        (RpmDependency(name="test-dep"), RpmDependency(name="test-dep-other"), False),
+        # flag GT - greater than
+        (
+            RpmDependency(
+                name="test-dep", version="9", release="el10", epoch="0", flags="GT"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            True,
+        ),
+        (
+            RpmDependency(
+                name="test-dep", version="10", release="el10", epoch="0", flags="GT"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            False,
+        ),
+        (
+            RpmDependency(
+                name="test-dep", version="11", release="el10", epoch="0", flags="GT"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            False,
+        ),
+        # flag GE - greater or equal
+        (
+            RpmDependency(
+                name="test-dep", version="9", release="el10", epoch="0", flags="GE"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            True,
+        ),
+        (
+            RpmDependency(
+                name="test-dep", version="10", release="el10", epoch="0", flags="GE"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            True,
+        ),
+        (
+            RpmDependency(
+                name="test-dep", version="11", release="el10", epoch="0", flags="GE"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            False,
+        ),
+        # flag EQ - equal
+        (
+            RpmDependency(
+                name="test-dep", version="9", release="el10", epoch="0", flags="EQ"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            False,
+        ),
+        (
+            RpmDependency(
+                name="test-dep", version="10", release="el10", epoch="0", flags="EQ"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            True,
+        ),
+        (
+            RpmDependency(
+                name="test-dep", version="11", release="el10", epoch="0", flags="EQ"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            False,
+        ),
+        # flag LE - less or equal
+        (
+            RpmDependency(
+                name="test-dep", version="9", release="el10", epoch="0", flags="LE"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            False,
+        ),
+        (
+            RpmDependency(
+                name="test-dep", version="10", release="el10", epoch="0", flags="LE"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            True,
+        ),
+        (
+            RpmDependency(
+                name="test-dep", version="11", release="el10", epoch="0", flags="LE"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            True,
+        ),
+        # flag LT - less than
+        (
+            RpmDependency(
+                name="test-dep", version="9", release="el10", epoch="0", flags="LT"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            False,
+        ),
+        (
+            RpmDependency(
+                name="test-dep", version="10", release="el10", epoch="0", flags="LT"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            False,
+        ),
+        (
+            RpmDependency(
+                name="test-dep", version="11", release="el10", epoch="0", flags="LT"
+            ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            True,
+        ),
+    ],
+)
+def test_is_requirement_resolved(requirement, provider, expected_result):
+    resolved = is_requirement_resolved(requirement, provider)
+    assert resolved is expected_result

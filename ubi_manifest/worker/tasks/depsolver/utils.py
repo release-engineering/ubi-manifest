@@ -5,7 +5,7 @@ from itertools import chain
 from logging import getLogger
 from typing import Dict, List, Tuple
 
-from pubtools.pulplib import Client, Criteria, Matcher
+from pubtools.pulplib import Client, Criteria, Matcher, RpmDependency
 from rpm import labelCompare as label_compare  # pylint: disable=no-name-in-module
 from ubiconfig import UbiConfig
 
@@ -17,6 +17,14 @@ OPEN_END_ONE_OR_MORE_PAR_REGEX = re.compile(r"^\(+|\)+$")
 OPERATOR_BOOL_REGEX = re.compile(r"if|else|and|or|unless|with|without")
 OPERATOR_NUM_REGEX = re.compile(r"<|<=|=|>|>=")
 
+RELATION_CMP_MAP = {
+    "GT": lambda x, y: label_compare(x, y) > 0,
+    "GE": lambda x, y: label_compare(x, y) >= 0,
+    "EQ": lambda x, y: label_compare(x, y) == 0,
+    "LE": lambda x, y: label_compare(x, y) <= 0,
+    "LT": lambda x, y: label_compare(x, y) < 0,
+}
+
 
 def make_pulp_client(config):
     kwargs = {
@@ -27,6 +35,7 @@ def make_pulp_client(config):
     # check cert/key for presence, if present assume cert/key for pulp auth
     if os.path.isfile(cert) and os.path.isfile(key):
         kwargs["cert"] = (cert, key)
+
     # if cert/key not present, use user/pass auth to pulp
     else:
         kwargs["auth"] = (config.get("pulp_username"), config.get("pulp_password"))
@@ -106,7 +115,7 @@ def parse_bool_deps(bool_dependency):
     to_parse = bool_dependency.split()
 
     skip_next = False
-    pkg_names = set()
+    out = set()
 
     for item in to_parse:
         # skip item immediately apearing after num operator
@@ -132,8 +141,8 @@ def parse_bool_deps(bool_dependency):
         if "(" in item:
             item += ")"
 
-        pkg_names.add(item)
-    return pkg_names
+        out.add(RpmDependency(name=item))
+    return out
 
 
 def vercmp_sort():
@@ -160,6 +169,20 @@ def vercmp_sort():
             return label_compare(self.evr_tuple, other.evr_tuple) != 0
 
     return Klass
+
+
+def is_requirement_resolved(requirement, provider):
+    if requirement.flags:
+        req_evr = (requirement.epoch, requirement.version, requirement.release)
+        prov_evr = (provider.epoch, provider.version, provider.release)
+        # compare provider with requirement
+        out = RELATION_CMP_MAP[requirement.flags](prov_evr, req_evr)
+
+    else:
+        # without flags we just compare names
+        out = requirement.name == provider.name
+
+    return out
 
 
 def _keep_n_latest_rpms(rpms, n=1):

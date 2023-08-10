@@ -12,14 +12,14 @@ from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import (
     Depsolver,
 )
 
-from .utils import create_and_insert_repo
+from .utils import create_and_insert_repo, rpmdeps_from_names
 
 
 def test_what_provides(pulp):
     """tests querying for provides in pulp"""
     depsolver = Depsolver(None, None, None)
 
-    requires = ["gcc"]
+    requires = [RpmDependency(name="gcc")]
 
     repo = create_and_insert_repo(id="test_repo_id", pulp=pulp)
 
@@ -56,9 +56,9 @@ def test_extract_and_resolve():
     depsolver = Depsolver(None, None, None)
 
     # set initial data to depsolver instance
-    depsolver._requires = {"pkg_a", "pkg_b"}
-    depsolver._provides = {"pkg_c", "pkg_d"}
-    depsolver._unsolved = {"pkg_a", "pkg_b"}
+    depsolver._requires = rpmdeps_from_names("pkg_a", "pkg_b")
+    depsolver._provides = rpmdeps_from_names("pkg_c", "pkg_d")
+    depsolver._unsolved = rpmdeps_from_names("pkg_a", "pkg_b")
 
     unit = RpmUnit(
         name="test",
@@ -73,11 +73,13 @@ def test_extract_and_resolve():
     depsolver.extract_and_resolve([unit])
     # internal state of depsolver should change
     # pkg_f, pkg_g and pkg_h are new requirements that are added to the requires set
-    assert depsolver._requires == {"pkg_a", "pkg_b", "pkg_f", "pkg_g", "pkg_h"}
+    assert depsolver._requires == rpmdeps_from_names(
+        "pkg_a", "pkg_b", "pkg_f", "pkg_g", "pkg_h"
+    )
     # pkg_e and pkg_b are added to the provides set
-    assert depsolver._provides == {"pkg_c", "pkg_d", "pkg_e", "pkg_b"}
+    assert depsolver._provides == rpmdeps_from_names("pkg_c", "pkg_d", "pkg_e", "pkg_b")
     # pkg_b is resolved but pkg_f, pkg_g and pkg_h are added as new unsolved requirement
-    assert depsolver._unsolved == {"pkg_a", "pkg_f", "pkg_g", "pkg_h"}
+    assert depsolver._unsolved == rpmdeps_from_names("pkg_a", "pkg_f", "pkg_g", "pkg_h")
 
 
 def test_get_base_packages(pulp):
@@ -232,7 +234,7 @@ def test_run(pulp):
 
             # check internal state of depsolver object
             # provides set holds all capabilities that we went through during depsolving
-            assert depsolver._provides == {
+            assert depsolver._provides == rpmdeps_from_names(
                 "gcc",
                 "jq",
                 "apr",
@@ -244,10 +246,10 @@ def test_run(pulp):
                 "lib.e",
                 "lib.f",
                 "lib.z",
-            }
+            )
 
             # requires set holds all requires that we went through during depsolving
-            assert depsolver._requires == {
+            assert depsolver._requires == rpmdeps_from_names(
                 "blacklisted-package",
                 "lib.a",
                 "lib.b",
@@ -259,22 +261,26 @@ def test_run(pulp):
                 "lib.z",
                 "pkgX(abc)",
                 "capY(xyz)",
-            }
+            )
 
             # unsolved set should be empty after depsolving finishes
             # it will be emptied even if we have unsolvable dependency
             assert len(depsolver._unsolved) == 0
 
             # there are unsolved requires, we can get those by
-            unsolved = depsolver._requires - depsolver._provides
-            # there is exactly two unresolved deps, lib_exclude is unsolved due to blacklisting
-            assert unsolved == {
-                "pkgX(abc)",
-                "capY(xyz)",
-                "lib.g",
-                "lib_exclude",
-                "blacklisted-package",
+            unsolved = {req.name for req in depsolver._requires} - {
+                prov.name for prov in depsolver._provides
             }
+            # there are exactly 5 unresolved deps, lib_exclude and blacklisted-package unsolved due to blacklisting
+            assert unsolved == set(
+                [
+                    "pkgX(abc)",
+                    "capY(xyz)",
+                    "lib.g",
+                    "lib_exclude",
+                    "blacklisted-package",
+                ]
+            )
 
             # checking correct rpm and srpm names and its associate source repo id
             output = [
@@ -617,3 +623,178 @@ def test_export():
     rpms = exported["test_repo_4"]
     assert len(rpms) == 1
     assert rpms[0]._unit is srpm
+
+
+def test_run_modular_deps(pulp):
+    """test the main method of depsolver using scenario when a non-modular RPM can theoretically be resolved a modular
+    RPM dependency, but we need to resolve a non-modular RPMs with
+    non-modular dependency otherwise we could end with uninstallable
+    package"""
+    (
+        repo,
+        all_requires,
+        all_provides,
+        expected_output_set,
+    ) = _prepare_test_data_modular_test(pulp)
+
+    whitelist = ["nginx"]
+    dep_item = DepsolverItem(
+        whitelist=whitelist,
+        blacklist=[],
+        in_pulp_repos=[repo],
+    )
+
+    module_rpms = {
+        "nginx-1.22.1-3.module+el9.2.0+17617+2f289c6c.x86_64.rpm",
+        "nginx-core-1.22.1-3.module+el9.2.0+17617+2f289c6c.x86_64.rpm",
+    }
+
+    with Depsolver([dep_item], [], module_rpms) as depsolver:
+        depsolver.run()
+        # check internal state of depsolver object
+        # provides set holds all capabilities that we went through during depsolving
+        assert depsolver._provides == all_provides
+
+        # requires set holds all requires that we went through during depsolving
+        assert depsolver._requires == all_requires
+
+        # unsolved set should be empty after depsolving finishes
+        # it will be emptied even if we have unsolvable dependency
+        assert len(depsolver._unsolved) == 0
+
+        # there are unsolved requires, we can get those by
+        unsolved = {req.name for req in depsolver._requires} - {
+            prov.name for prov in depsolver._provides
+        }
+        # there is no unsolved dep.
+        assert len(unsolved) == 0
+
+        # checking correct rpm filenames and its associate source repo id
+        output = [
+            (item.filename, item.associate_source_repo_id)
+            for item in depsolver.output_set | depsolver.srpm_output_set
+        ]
+
+        assert sorted(output) == expected_output_set
+
+
+def _prepare_test_data_modular_test(pulp):
+    rpm_non_mod_1_provide = RpmDependency(
+        epoch="1",
+        flags="EQ",
+        name="nginx",
+        release="14.el9",
+        version="1.20.1",
+    )
+    rpm_non_mod_1_require = RpmDependency(
+        epoch="1",
+        flags="EQ",
+        name="nginx-core",
+        release="14.el9",
+        version="1.20.1",
+    )
+    rpm_non_mod_1 = RpmUnit(
+        name="nginx",
+        filename="nginx-1.20.1-14.el9.x86_64.rpm",
+        version="1.20.1",
+        release="14.el9",
+        epoch="1",
+        arch="x86_64",
+        provides=[rpm_non_mod_1_provide],
+        requires=[rpm_non_mod_1_require],
+        content_type_id="rpm",
+    )
+    rpm_non_mod_2_provide = RpmDependency(
+        epoch="1",
+        flags="EQ",
+        name="nginx-core",
+        release="14.el9",
+        version="1.20.1",
+    )
+
+    rpm_non_mod_2 = RpmUnit(
+        name="nginx-core",
+        filename="nginx-core-1.20.1-14.el9.x86_64.rpm",
+        version="1.20.1",
+        release="14.el9",
+        epoch="1",
+        arch="x86_64",
+        provides=[rpm_non_mod_2_provide],
+        requires=[],
+        content_type_id="rpm",
+    )
+
+    md_unit = ModulemdUnit(
+        name="nginx",
+        stream="1.22",
+        version=9020020221218004026,
+        context="9",
+        arch="x86_64",
+        artifacts=[
+            "nginx-1:1.22.1-3.module+el9.2.0+17617+2f289c6c.x86_64",
+            "nginx-core-1:1.22.1-3.module+el9.2.0+17617+2f289c6c.x86_64",
+        ],
+    )
+    rpm_mod_1_provide = RpmDependency(
+        epoch="1",
+        flags="EQ",
+        name="nginx",
+        release="3.module+el9.2.0+17617+2f289c6c",
+        version="1.22.1",
+    )
+    rpm_mod_1_require = RpmDependency(
+        epoch="1",
+        flags="EQ",
+        name="nginx-core",
+        release="3.module+el9.2.0+17617+2f289c6c",
+        version="1.22.1",
+    )
+    rpm_mod_1 = RpmUnit(
+        name="nginx",
+        filename="nginx-1.22.1-3.module+el9.2.0+17617+2f289c6c.x86_64.rpm",
+        version="1",
+        release="3.module+el9.2.0+17617+2f289c6c",
+        epoch="1.22.1",
+        arch="x86_64",
+        provides=[rpm_mod_1_provide],
+        requires=[rpm_mod_1_require],
+        content_type_id="rpm",
+    )
+    rpm_mod_2_provide = RpmDependency(
+        epoch="1",
+        flags="EQ",
+        name="nginx-core",
+        release="3.module+el9.2.0+17617+2f289c6c",
+        version="1.22.1",
+    )
+    rpm_mod_2 = RpmUnit(
+        name="nginx-core",
+        filename="nginx-core-1.22.1-3.module+el9.2.0+17617+2f289c6c.x86_64.rpm",
+        version="1.22.1",
+        release="3.module+el9.2.0+17617+2f289c6c",
+        epoch="1",
+        arch="x86_64",
+        provides=[rpm_mod_2_provide],
+        requires=[],
+        content_type_id="rpm",
+    )
+
+    repo = create_and_insert_repo(id="test_repo", pulp=pulp)
+
+    rpms = [rpm_non_mod_1, rpm_non_mod_2, rpm_mod_1, rpm_mod_2]
+
+    pulp.insert_units(repo, rpms + [md_unit])
+
+    # all rpms are expected to be in the output set: all non-modular and all modular
+    expected_output_set = [(unit.filename, "test_repo") for unit in rpms]
+    all_provides = set(
+        [
+            rpm_non_mod_1_provide,
+            rpm_non_mod_2_provide,
+            rpm_mod_1_provide,
+            rpm_mod_2_provide,
+        ]
+    )
+    all_requires = set([rpm_non_mod_1_require, rpm_mod_1_require])
+
+    return repo, all_requires, all_provides, sorted(expected_output_set)
