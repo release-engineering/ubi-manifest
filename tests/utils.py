@@ -2,7 +2,7 @@ from typing import List
 
 import ubiconfig
 from attrs import define
-from pubtools.pulplib import YumRepository
+from pubtools.pulplib import YumRepository, RpmDependency
 
 
 def create_and_insert_repo(**kwargs):
@@ -50,3 +50,7 @@ class MockedRedis:
 
     def keys(self) -> List[str]:
         return list(self.data.keys())
+
+
+def rpmdeps_from_names(*names):
+    return {RpmDependency(name=name) for name in names}

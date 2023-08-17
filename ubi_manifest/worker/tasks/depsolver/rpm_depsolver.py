@@ -15,6 +15,7 @@ from .utils import (
     create_or_criteria,
     get_n_latest_from_content,
     parse_bool_deps,
+    is_requirement_resolved,
 )
 
 _LOG = logging.getLogger(__name__)
@@ -109,19 +110,25 @@ class Depsolver:
                     # add parsed bool deps to requires that need solving
                     _requires |= parse_bool_deps(item.name)
                 else:
-                    _requires.add(item.name)
+                    _requires.add(item)
+
             for item in rpm.provides:
                 # add to global provides
-                self._provides.add(item.name)
+                self._provides.add(item)
 
         # update global requires
         self._requires |= _requires
         # add new requires to unsolved
         self._unsolved |= _requires
-        # get solved requires
-        solved = self._unsolved & self._provides
-        # and subtract solved requires
-        self._unsolved -= solved
+
+        for prov in self._provides:
+            solved = set()
+            for req in self._unsolved:
+                if prov.name != req.name:
+                    continue
+                if is_requirement_resolved(req, prov):
+                    solved.add(req)
+            self._unsolved -= solved
 
     def what_provides(self, list_of_requires, repos, blacklist):
         """
@@ -131,7 +138,7 @@ class Depsolver:
         # for given requirement. It should be decided which one should get into
         # the output. Currently we'll get all matching the query.
         crit = create_or_criteria(
-            ["provides.name"], [(item,) for item in list_of_requires]
+            ["provides.name"], [(item.name,) for item in list_of_requires]
         )
 
         content = f_proxy(
@@ -251,7 +258,9 @@ class Depsolver:
                 self.srpm_output_set.add(srpm)
 
         # log warnings if depsolving failed
-        deps_not_found = self._requires - self._provides
+        deps_not_found = {req.name for req in self._requires} - {
+            prov.name for prov in self._provides
+        }
         if deps_not_found:
             self._log_warnings(deps_not_found, pulp_repos, merged_blacklist)
 
@@ -298,7 +307,7 @@ class Depsolver:
             out = set()
             for item in requires:
                 if item.name.startswith("("):
-                    out |= parse_bool_deps(item.name)
+                    out |= {dep.name for dep in parse_bool_deps(item.name)}
                 else:
                     out.add(item.name)
             return out
