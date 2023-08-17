@@ -382,7 +382,7 @@ def test_split_filename(filename, name, ver, rel, epoch, arch):
 def test_parse_blacklist():
     with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
         loader = UbiConfigLoader("https://foo.bar.com/some-repo.git")
-        config = loader.get_config("rpm_out", "8")
+        config = loader.get_config("cs_rpm_in", "cs_rpm_out", "8")
 
         parsed = parse_blacklist_config(config)
 

@@ -1,6 +1,7 @@
 import json
 import logging
 from typing import Dict, List
+from collections import defaultdict
 
 import redis
 from pubtools.pulplib import ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
@@ -24,6 +25,10 @@ from ubi_manifest.worker.tasks.depsolver.utils import (
 _LOG = logging.getLogger(__name__)
 
 
+class ContentConfigMissing(Exception):
+    pass
+
+
 @app.task
 def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
     """
@@ -40,7 +45,7 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
 
     with make_pulp_client(app.conf) as client:
         repos_map = {}
-        debuginfo_dep_map = {}
+        debug_dep_map = {}
         dep_map = {}
         mod_dep_map = {}
         in_source_rpm_repos = []
@@ -49,14 +54,6 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
             debuginfo_repo = repo.get_debug_repository()
             srpm_repo = repo.get_source_repository()
 
-            version = repo.ubi_config_version
-            # get proper ubi_config for given content_set and version
-            config = ubi_config_loader.get_config(repo.content_set, version)
-            # config not found for specific version, try to fallback to default version
-            if config is None:
-                config = ubi_config_loader.get_config(
-                    repo.content_set, version.split(".")[0]
-                )
             # create rhel_repo:ubi_repo mapping
             for _repo, sources in zip(
                 [repo, debuginfo_repo, srpm_repo],
@@ -69,29 +66,52 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
                 for item in sources:
                     repos_map[item] = _repo.id
 
-            in_source_rpm_repos.extend(_get_population_sources(client, srpm_repo))
-            whitelist, debuginfo_whitelist = _filter_whitelist(config)
-            blacklist = parse_blacklist_config(config)
-
-            # modulemd depsolver vars
-            modulelist = config.modules.whitelist
-            mod_dep_map[repo.id] = _make_modular_depsolver_item(
-                client, repo, modulelist
+            cs_repo_map, cs_debug_repo_map = _get_population_sources_per_cs(
+                client, repo
             )
+            # if we have population sources with different content sets and different content configs
+            # we need to make sure that we use correct config for each input repo
+            for input_cs, input_repos in cs_repo_map.items():
+                config = _get_content_config(
+                    ubi_config_loader,
+                    input_cs,
+                    repo.content_set,
+                    repo.ubi_config_version,
+                )
+                whitelist, debuginfo_whitelist = _filter_whitelist(config)
+                blacklist = parse_blacklist_config(config)
 
-            dep_map[repo.id] = _make_depsolver_item(client, repo, whitelist, blacklist)
-            debuginfo_dep_map[debuginfo_repo.id] = _make_depsolver_item(
-                client, debuginfo_repo, debuginfo_whitelist, blacklist
-            )
+                in_source_rpm_repos.extend(_get_population_sources(client, srpm_repo))
+
+                dep_map[(repo.id, input_cs)] = DepsolverItem(
+                    whitelist, blacklist, input_repos
+                )
+
+                debug_dep_map[(debuginfo_repo.id, input_cs)] = DepsolverItem(
+                    debuginfo_whitelist,
+                    blacklist,
+                    cs_debug_repo_map[input_cs],
+                )
+
+                # modulemd depsolver vars
+                modulelist = config.modules.whitelist
+                mod_dep_map[(repo.id, input_cs)] = ModularDepsolverItem(
+                    modulelist, repo, input_repos
+                )
 
         # run modular depsolver
-        _LOG.info("Running MODULEMD depsolver for repos: %s", list(mod_dep_map.keys()))
+        _LOG.info(
+            "Running MODULEMD depsolver for repos: %s",
+            [item[0] for item in mod_dep_map.keys()],
+        )
         modulemd_out = _run_modulemd_depsolver(list(mod_dep_map.values()), repos_map)
         out = modulemd_out["modules_out"]
         modulemd_rpm_deps = modulemd_out["rpm_dependencies"]
 
         # run depsolver for binary repos
-        _LOG.info("Running depsolver for RPM repos: %s", list(dep_map.keys()))
+        _LOG.info(
+            "Running depsolver for RPM repos: %s", [item[0] for item in dep_map.keys()]
+        )
         # TODO this blocks task from processing, depsolving of debuginfo packages
         # could be moved to the Depsolver. It should lead to more async processing
         # and better performance
@@ -103,33 +123,19 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
         )
 
         _merge_output_dictionary(out, rpm_out)
-
-        # generate missing debuginfo packages
-        # TODO this seems to generate too many debuginfo packages - fix after tests with real data
-        for ubi_repo_id, pkg_list in out.items():
-            debuginfo_to_add = set()
-            for pkg in pkg_list:
-                # inspired with pungi depsolver
-                if pkg.isinstance_inner_unit(RpmUnit) and pkg.sourcerpm:
-                    source_name = split_filename(pkg.sourcerpm)[0]
-                    debuginfo_to_add.add(f"{pkg.name}-debuginfo")
-                    debuginfo_to_add.add(f"{source_name}-debugsource")
-
-            _id = client.get_repository(ubi_repo_id).get_debug_repository().id
-            # update whitelist for given ubi depsolver item
-            debuginfo_dep_map[_id].whitelist.update(debuginfo_to_add)
+        _update_debug_whitelist(client, out, debug_dep_map)
 
         # run depsolver for debuginfo repo
         _LOG.info(
-            "Running depsolver for DEBUGINFO repos: %s", list(debuginfo_dep_map.keys())
+            "Running depsolver for DEBUGINFO repos: %s",
+            [item[0] for item in debug_dep_map.keys()],
         )
         debuginfo_out = _run_depsolver(
-            list(debuginfo_dep_map.values()),
+            list(debug_dep_map.values()),
             repos_map,
             in_source_rpm_repos,
             modulemd_rpm_deps,
         )
-
     # merge 'out' and 'debuginfo_out' dicts without overwriting any entry
     _merge_output_dictionary(out, debuginfo_out)
 
@@ -140,6 +146,28 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
             out[repo_id] = []
     # save depsolved data to redis
     _save(out)
+
+
+def _update_debug_whitelist(client, output_set, debug_dep_map):
+    # generate missing debuginfo packages
+    # TODO this seems to generate too many debuginfo packages - fix after tests with real data
+    for ubi_repo_id, pkg_list in output_set.items():
+        debuginfo_to_add = set()
+        for pkg in pkg_list:
+            # inspired with pungi depsolver
+            if pkg.isinstance_inner_unit(RpmUnit) and pkg.sourcerpm:
+                source_name = split_filename(pkg.sourcerpm)[0]
+                debuginfo_to_add.add(f"{pkg.name}-debuginfo")
+                debuginfo_to_add.add(f"{source_name}-debugsource")
+
+        _repo_out = client.get_repository(ubi_repo_id)
+        _repo_debug_out = _repo_out.get_debug_repository()
+        for _repo_in_id in _repo_debug_out.population_sources:
+            # update whitelist for given ubi depsolver item
+            rpm_in_repo = client.get_repository(_repo_in_id).get_binary_repository()
+            debug_dep_map[
+                (_repo_debug_out.id, rpm_in_repo.content_set)
+            ].whitelist.update(debuginfo_to_add)
 
 
 def _save(data: Dict[str, List[UbiUnit]]) -> None:
@@ -195,16 +223,6 @@ def _filter_whitelist(ubi_config):
     return whitelist, debuginfo_whitelist
 
 
-def _make_depsolver_item(client, repo, whitelist, blacklist):
-    in_pulp_repos = _get_population_sources(client, repo)
-    return DepsolverItem(whitelist, blacklist, in_pulp_repos)
-
-
-def _make_modular_depsolver_item(client, repo, modulelist):
-    in_pulp_repos = _get_population_sources(client, repo)
-    return ModularDepsolverItem(modulelist, repo, in_pulp_repos)
-
-
 def _get_population_sources(client, repo):
     return [client.get_repository(repo_id) for repo_id in repo.population_sources]
 
@@ -243,3 +261,32 @@ def _merge_output_dictionary(out, update):
                     out[key].append(item)
         else:
             out[key] = data
+
+
+def _get_population_sources_per_cs(client, repo):
+    rpm_sources = defaultdict(list)
+    debug_sources = defaultdict(list)
+    for repo_id in repo.population_sources:
+        input_rpm_repo = client.get_repository(repo_id)
+        input_debug_repo = input_rpm_repo.get_debug_repository()
+
+        # intentionally using input_rpm_repo.content_set as key in both dictionaries
+        rpm_sources[input_rpm_repo.content_set].append(input_rpm_repo)
+        debug_sources[input_rpm_repo.content_set].append(input_debug_repo)
+
+    return rpm_sources, debug_sources
+
+
+def _get_content_config(ubi_config_loader, input_cs, output_cs, version):
+    out = None
+    # get proper ubi_config for given input and output content sets and a version
+    # fallback to default version if there is no match for requested config
+    for _ver in (version, version.split(".")[0]):
+        out = ubi_config_loader.get_config(input_cs, output_cs, _ver)
+        if out:
+            break
+
+    if out is None:
+        raise ContentConfigMissing
+
+    return out
