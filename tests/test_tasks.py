@@ -1,4 +1,5 @@
 import json
+from functools import partial
 from unittest import mock
 
 import pytest
@@ -922,3 +923,91 @@ def _setup_repos_missing_config(pulp):
     rhel_source_repo = create_and_insert_repo(
         id="rhel_source_repo", pulp=pulp, content_set="cs_srpm_in"
     )
+
+
+def test_multiple_population_sources_skip_depsolving(pulp):
+    _setup_data_multiple_population_sources(pulp)
+
+    with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
+        with mock.patch(
+            "ubiconfig.get_loader",
+            return_value=MockLoader(flags={"base_pkgs_only": True}),
+        ):
+            with mock.patch(
+                "ubi_manifest.worker.tasks.depsolve.redis.from_url"
+            ) as mock_redis_from_url:
+                redis = MockedRedis(data={})
+                mock_redis_from_url.return_value = redis
+
+                client.return_value = pulp.client
+                # let run the depsolve task
+                result = depsolve.depsolve_task(["ubi_repo"], "fake-url")
+                # we don't return anything useful, everything is saved in redis
+                assert result is None
+
+                # there should 3 keys stored in redis
+                assert sorted(redis.keys()) == [
+                    "ubi_debug_repo",
+                    "ubi_repo",
+                    "ubi_source_repo",
+                ]
+
+                # load json string stored in redis
+                data = redis.get("ubi_repo")
+                content = sorted(json.loads(data), key=lambda d: d["value"])
+                # binary repo contains only 2 rpms but each unit has different src_repo_id
+                assert len(content) == 2
+
+                unit = content[0]
+                assert unit["src_repo_id"] == "rhel_repo-other-2"
+                assert unit["unit_type"] == "RpmUnit"
+                assert unit["unit_attr"] == "filename"
+                assert unit["value"] == "bind-11.200.x86_64.rpm"
+
+                unit = content[1]
+                assert unit["src_repo_id"] == "rhel_repo-2"
+                assert unit["unit_type"] == "RpmUnit"
+                assert unit["unit_attr"] == "filename"
+                assert unit["value"] == "gcc-11.200.x86_64.rpm"
+
+                # load json string stored in redis
+                data = redis.get("ubi_debug_repo")
+                content = sorted(json.loads(data), key=lambda d: d["value"])
+
+                # debuginfo repo is empty because by using flag "base_pkgs_only": True we don't allow
+                # adding additional debug pkgs by guessing their names, but only we allow pkgs defined
+                # in config
+                assert len(content) == 0
+
+                # load json string stored in redis
+                data = redis.get("ubi_source_repo")
+                content = sorted(json.loads(data), key=lambda d: d["value"])
+                # source repo contain 1 SRPM package, correct src_repo_ids
+                # SRPM for gcc packge is not available
+                assert len(content) == 1
+                unit = content[0]
+                assert unit["src_repo_id"] == "rhel_source_repo-other"
+                assert unit["unit_type"] == "RpmUnit"
+                assert unit["unit_attr"] == "filename"
+                assert unit["value"] == "bind_src-2-0.src.rpm"
+
+
+@pytest.mark.parametrize(
+    "flags, consistent",
+    [
+        ({("repo_1", "cs"): {"flag": True}, ("repo_2", "cs"): {"flag": False}}, False),
+        (
+            {("repo_1", "cs"): {"flag": True}, ("repo_2", "cs"): {"other_flag": "foo"}},
+            False,
+        ),
+        ({("repo_1", "cs"): {"flag": True}, ("repo_2", "cs"): {}}, False),
+        ({("repo_1", "cs"): {"flag": True}, ("repo_2", "cs"): {"flag": True}}, True),
+    ],
+)
+def test_validate_depsolver_flags(flags, consistent):
+    _test_call = partial(depsolve.validate_depsolver_flags, flags)
+    if consistent:
+        _test_call()  # no exception raised
+    else:
+        with pytest.raises(depsolve.InconsistentDepsolverConfig):
+            _test_call()

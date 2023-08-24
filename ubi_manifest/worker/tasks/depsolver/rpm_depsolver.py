@@ -35,6 +35,7 @@ class Depsolver:
         repos: List[DepsolverItem],
         srpm_repos,
         modulemd_dependencies: Set[str],
+        **kwargs,
     ) -> None:
         self.repos: List[DepsolverItem] = repos
         self.modulemd_dependencies: Set[str] = modulemd_dependencies
@@ -55,6 +56,7 @@ class Depsolver:
         self._executor: ThreadPoolExecutor = Executors.thread_pool(
             max_workers=MAX_WORKERS
         )
+        self._base_pkgs_only = kwargs.get("base_pkgs_only") or False
 
     def __enter__(self):
         return self
@@ -229,8 +231,10 @@ class Depsolver:
             )
             source_rpm_fts.append(ft)
 
+        self._log_missing_base_pkgs()
+
         to_resolve = set(self.output_set)
-        while True:
+        while True and not self._base_pkgs_only:
             # extract provides and requires
             self.extract_and_resolve(to_resolve)
             # we are finished if _ensolved is empty
@@ -257,12 +261,13 @@ class Depsolver:
             for srpm in srpm_content.result():
                 self.srpm_output_set.add(srpm)
 
-        # log warnings if depsolving failed
-        deps_not_found = {req.name for req in self._requires} - {
-            prov.name for prov in self._provides
-        }
-        if deps_not_found:
-            self._log_warnings(deps_not_found, pulp_repos, merged_blacklist)
+        if not self._base_pkgs_only:
+            # log warnings if depsolving failed
+            deps_not_found = {req.name for req in self._requires} - {
+                prov.name for prov in self._provides
+            }
+            if deps_not_found:
+                self._log_warnings(deps_not_found, pulp_repos, merged_blacklist)
 
     def _batch_size(self):
         if len(self._unsolved) < BATCH_SIZE_RESOLVER:
@@ -334,3 +339,13 @@ class Depsolver:
                     input_repos,
                     sorted(depending_rpms),
                 )
+
+    def _log_missing_base_pkgs(self):
+        found_pkg_names = {item.name for item in self.output_set}
+
+        for item in self.repos:
+            missing = item.whitelist - found_pkg_names
+            if missing:
+                repos = [repo.id for repo in item.in_pulp_repos]
+                for pkg_name in missing:
+                    _LOG.warning("'%s' not found in %s.", pkg_name, repos)

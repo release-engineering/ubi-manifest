@@ -29,6 +29,10 @@ class ContentConfigMissing(Exception):
     pass
 
 
+class InconsistentDepsolverConfig(Exception):
+    pass
+
+
 @app.task
 def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
     """
@@ -44,6 +48,8 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
     ubi_config_loader = UbiConfigLoader(content_config_url)
 
     with make_pulp_client(app.conf) as client:
+        depsolver_flags = {}  # (input_cs, ubi_repo_id): {"flag_x": "value"}
+
         repos_map = {}
         debug_dep_map = {}
         dep_map = {}
@@ -80,11 +86,14 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
                 )
                 whitelist, debuginfo_whitelist = _filter_whitelist(config)
                 blacklist = parse_blacklist_config(config)
+                depsolver_flags[(repo.id, input_cs)] = config.flags.as_dict()
 
                 in_source_rpm_repos.extend(_get_population_sources(client, srpm_repo))
 
                 dep_map[(repo.id, input_cs)] = DepsolverItem(
-                    whitelist, blacklist, input_repos
+                    whitelist,
+                    blacklist,
+                    input_repos,
                 )
 
                 debug_dep_map[(debuginfo_repo.id, input_cs)] = DepsolverItem(
@@ -99,6 +108,7 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
                     modulelist, repo, input_repos
                 )
 
+        flags = validate_depsolver_flags(depsolver_flags)
         # run modular depsolver
         _LOG.info(
             "Running MODULEMD depsolver for repos: %s",
@@ -120,10 +130,12 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
             repos_map,
             in_source_rpm_repos,
             modulemd_rpm_deps,
+            flags,
         )
 
         _merge_output_dictionary(out, rpm_out)
-        _update_debug_whitelist(client, out, debug_dep_map)
+        if not flags.get("base_pkgs_only"):
+            _update_debug_whitelist(client, out, debug_dep_map)
 
         # run depsolver for debuginfo repo
         _LOG.info(
@@ -135,6 +147,7 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
             repos_map,
             in_source_rpm_repos,
             modulemd_rpm_deps,
+            flags,
         )
     # merge 'out' and 'debuginfo_out' dicts without overwriting any entry
     _merge_output_dictionary(out, debuginfo_out)
@@ -227,8 +240,12 @@ def _get_population_sources(client, repo):
     return [client.get_repository(repo_id) for repo_id in repo.population_sources]
 
 
-def _run_depsolver(depolver_items, repos_map, in_source_rpm_repos, modulemd_deps):
-    with Depsolver(depolver_items, in_source_rpm_repos, modulemd_deps) as depsolver:
+def _run_depsolver(
+    depsolver_items, repos_map, in_source_rpm_repos, modulemd_deps, flags
+):
+    with Depsolver(
+        depsolver_items, in_source_rpm_repos, modulemd_deps, **flags
+    ) as depsolver:
         depsolver.run()
         exported = depsolver.export()
         out = remap_keys(repos_map, exported)
@@ -290,3 +307,21 @@ def _get_content_config(ubi_config_loader, input_cs, output_cs, version):
         raise ContentConfigMissing
 
     return out
+
+
+def validate_depsolver_flags(depsolver_flags):
+    """
+    Validate all acquired flags, they have to be consistent for all repositories
+    we are processing in one depsolve task otherwise an exception is raised.
+    """
+    reference_flags = {}
+    all_flags = list(depsolver_flags.values())
+
+    if all_flags:
+        reference_flags = all_flags[0]
+
+        for flags in all_flags[1:]:
+            if flags != reference_flags:
+                raise InconsistentDepsolverConfig
+
+    return reference_flags
