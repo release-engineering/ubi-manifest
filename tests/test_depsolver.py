@@ -204,18 +204,20 @@ def test_run(pulp):
     ]
     blacklist_2 = [PackageToExclude("base_pkg_to_exclude")]
 
-    whitelist_1 = ["gcc", "jq", "perl-version"]
+    whitelist_1 = set(["gcc", "jq", "perl-version"])
     dep_item_1 = DepsolverItem(
         whitelist=whitelist_1,
         blacklist=blacklist_1,
         in_pulp_repos=[repos[0]],
     )
 
-    whitelist_2 = [
-        "apr",
-        "babel",
-        "base_pkg_to_exclude",
-    ]  # simulate blacklisting a package that was wrongly put into whitelist
+    whitelist_2 = set(
+        [
+            "apr",
+            "babel",
+            "base_pkg_to_exclude",
+        ]
+    )  # simulate blacklisting a package that was wrongly put into whitelist
     dep_item_2 = DepsolverItem(
         whitelist=whitelist_2,
         blacklist=blacklist_2,
@@ -637,7 +639,7 @@ def test_run_modular_deps(pulp):
         expected_output_set,
     ) = _prepare_test_data_modular_test(pulp)
 
-    whitelist = ["nginx"]
+    whitelist = set(["nginx"])
     dep_item = DepsolverItem(
         whitelist=whitelist,
         blacklist=[],
@@ -798,3 +800,154 @@ def _prepare_test_data_modular_test(pulp):
     all_requires = set([rpm_non_mod_1_require, rpm_mod_1_require])
 
     return repo, all_requires, all_provides, sorted(expected_output_set)
+
+
+def test_run_with_skipped_depsolving(pulp):
+    """
+    Tests that while using 'base-pkgs-only: True' flag in ubi config file,
+    depsolving for RPMs is not run and only pkgs from config file are exported
+    in output. Also guessing names of debug pkgs is skipped.
+    """
+    rpm_rpm, repo_srpm, expected_output_set = _prepare_test_data_skip_depsolving(pulp)
+
+    whitelist = set(["gcc", "jq", "perl-version"])
+    dep_item = DepsolverItem(
+        whitelist=whitelist,
+        blacklist=[],
+        in_pulp_repos=[rpm_rpm],
+    )
+
+    flags = {
+        "base_pkgs_only": True,
+    }
+    with Depsolver([dep_item], [repo_srpm], [], **flags) as depsolver:
+        depsolver.run()
+        # check internal state of depsolver object
+        # with provided flag base_pkgs_only:True we don't store any of provides|requires
+        assert depsolver._provides == set()
+
+        assert depsolver._requires == set()
+
+        assert len(depsolver._unsolved) == 0
+
+        # checking correct rpm and srpm names and its associate source repo id
+        output = [
+            (item.name, item.associate_source_repo_id)
+            for item in depsolver.output_set | depsolver.srpm_output_set
+        ]
+
+        assert sorted(output) == expected_output_set
+
+
+def _prepare_test_data_skip_depsolving(pulp):
+    repo_rpm = create_and_insert_repo(id="test_repo_rpm", pulp=pulp)
+    repo_srpm = create_and_insert_repo(id="test_repo_srpm", pulp=pulp)
+
+    unit_1 = RpmUnit(
+        name="gcc",
+        version="10",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[RpmDependency(name="lib.a")],
+        requires=[
+            RpmDependency(name="dep-gcc"),
+            RpmDependency(name="lib.b"),
+            RpmDependency(name="lib.c"),
+        ],
+        sourcerpm="gcc.src.rpm",
+    )
+
+    unit_2 = RpmUnit(
+        name="dep-gcc",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[RpmDependency(name="dep-gcc")],
+        requires=[
+            RpmDependency(name="lib.a"),
+            RpmDependency(name="lib.b"),
+        ],
+        sourcerpm="dep-gcc.src.rpm",
+    )
+    # note: the dependency "/some/script" will be skipped from processing
+
+    unit_1_srpm = RpmUnit(
+        name="gcc",
+        filename="gcc.src.rpm",
+        version="1",
+        release="1",
+        epoch="1",
+        arch="x86_64",
+        provides=[],
+        requires=[],
+        content_type_id="srpm",
+    )
+
+    unit_2_srpm = RpmUnit(
+        name="dep-gcc",
+        filename="dep-gcc.src.rpm",
+        version="1",
+        release="1",
+        epoch="1",
+        arch="x86_64",
+        provides=[],
+        requires=[],
+        content_type_id="srpm",
+    )
+
+    pulp.insert_units(repo_rpm, [unit_1, unit_2])
+    pulp.insert_units(repo_srpm, [unit_1_srpm, unit_2_srpm])
+
+    expected_output_set = [(unit.name, "test_repo_rpm") for unit in [unit_1]] + [
+        (unit.name, "test_repo_srpm") for unit in [unit_1_srpm]
+    ]
+
+    return repo_rpm, repo_srpm, sorted(expected_output_set)
+
+
+def test_log_missing_base_pkgs(pulp):
+    repo_rpm = create_and_insert_repo(id="test_repo_rpm", pulp=pulp)
+    unit_1 = RpmUnit(
+        name="gcc",
+        version="10",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        sourcerpm="gcc.src.rpm",
+        provides=[],
+        requires=[],
+    )
+    pulp.insert_units(repo_rpm, [unit_1])
+
+    with LogCapture() as mock_log:
+        whitelist = set(["gcc", "jq", "perl-version"])
+        dep_item = DepsolverItem(
+            whitelist=whitelist,
+            blacklist=[],
+            in_pulp_repos=[repo_rpm],
+        )
+
+        with Depsolver([dep_item], [], []) as depsolver:
+            depsolver.run()
+            # logger should warn when the pkgs from whitelist weren't found
+            mock_log.check_present(
+                (
+                    "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
+                    "WARNING",
+                    "'jq' not found in ['test_repo_rpm'].",
+                ),
+                (
+                    "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
+                    "WARNING",
+                    "'perl-version' not found in ['test_repo_rpm'].",
+                ),
+                order_matters=False,
+            )
+            # check the output for the only `gcc` package
+            output = [
+                (item.name, item.associate_source_repo_id)
+                for item in depsolver.output_set | depsolver.srpm_output_set
+            ]
+            assert output == [("gcc", "test_repo_rpm")]

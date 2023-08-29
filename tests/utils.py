@@ -13,6 +13,9 @@ def create_and_insert_repo(**kwargs):
 
 
 class MockLoader:
+    def __init__(self, flags=None):
+        self.flags = {"flags": flags or {}}
+
     def load_all(self):
         config_raw_1 = {
             "modules": {
@@ -34,6 +37,7 @@ class MockLoader:
             },
             "arches": ["x86_64", "src"],
         }
+        config_raw_1.update(self.flags)
 
         config_raw_2 = {
             "modules": {
@@ -61,6 +65,8 @@ class MockLoader:
             },
             "arches": ["x86_64", "src"],
         }
+        config_raw_2.update(self.flags)
+
         return [
             ubiconfig.UbiConfig.load_from_dict(config, file, "8")
             for config, file in [(config_raw_1, "file_1"), (config_raw_2, "file_2")]
