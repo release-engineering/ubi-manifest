@@ -1,7 +1,7 @@
-import json
 import logging
 from typing import Dict, List
 from collections import defaultdict
+import json
 
 import redis
 from pubtools.pulplib import ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
@@ -110,10 +110,7 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
 
         flags = validate_depsolver_flags(depsolver_flags)
         # run modular depsolver
-        _LOG.info(
-            "Running MODULEMD depsolver for repos: %s",
-            [item[0] for item in mod_dep_map.keys()],
-        )
+        _LOG.info("Running MODULEMD depsolver for repos: %s",[item[0] for item in mod_dep_map.keys()],)
         modulemd_out = _run_modulemd_depsolver(list(mod_dep_map.values()), repos_map)
         out = modulemd_out["modules_out"]
         modulemd_rpm_deps = modulemd_out["rpm_dependencies"]
