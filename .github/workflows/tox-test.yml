@@ -70,4 +70,16 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-          verbose: true  
+          verbose: true
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      - name: Install Tox
+        run: pip install tox 'virtualenv<20.21.1'
+      - name: Run Tox
+        run: tox -e mypy
