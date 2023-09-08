@@ -3,7 +3,6 @@ from functools import partial
 from unittest import mock
 
 import pytest
-
 from pubtools.pulplib import Distributor, ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
 
 from ubi_manifest.worker.tasks import depsolve

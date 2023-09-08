@@ -14,8 +14,8 @@ from .utils import (
     _is_blacklisted,
     create_or_criteria,
     get_n_latest_from_content,
-    parse_bool_deps,
     is_requirement_resolved,
+    parse_bool_deps,
 )
 
 _LOG = logging.getLogger(__name__)
