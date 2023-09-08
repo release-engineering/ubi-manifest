@@ -6,8 +6,8 @@ from pubtools.pulplib import (
     Matcher,
     ModulemdDependency,
     ModulemdUnit,
-    RpmUnit,
     RpmDependency,
+    RpmUnit,
 )
 
 from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
@@ -19,11 +19,11 @@ from ubi_manifest.worker.tasks.depsolver.utils import (
     get_criteria_for_modules,
     get_modulemd_output_set,
     get_n_latest_from_content,
+    is_requirement_resolved,
     parse_blacklist_config,
     parse_bool_deps,
     split_filename,
     vercmp_sort,
-    is_requirement_resolved,
 )
 
 from .utils import MockLoader, rpmdeps_from_names

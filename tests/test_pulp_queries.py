@@ -1,5 +1,6 @@
-from attrs import define
 from tempfile import NamedTemporaryFile
+
+from attrs import define
 from pubtools.pulplib import Client, ModulemdUnit, RpmUnit, YumRepository
 
 from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
