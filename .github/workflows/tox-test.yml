@@ -1,6 +1,10 @@
 name: Tox tests
 
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+    branches: main
+
 
 jobs:
   py311:
@@ -82,4 +86,17 @@ jobs:
       - name: Install Tox
         run: pip install tox 'virtualenv<20.21.1'
       - name: Run Tox
+        id: mypy-run
         run: tox -e mypy
+        continue-on-error: true
+      - name: Report if mypy has gone wrong.
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '*Warning*: The **mypy** type checker has found some errors. See the mypy job for details'
+            })
+        if: steps.mypy-run.outcome == 'failure'
