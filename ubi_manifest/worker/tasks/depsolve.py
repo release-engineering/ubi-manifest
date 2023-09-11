@@ -1,7 +1,7 @@
 import json
+import logging
 from collections import defaultdict
 from typing import Dict, List
-import logging
 
 import redis
 from pubtools.pulplib import ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
@@ -61,7 +61,14 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
             srpm_repo = repo.get_source_repository()
 
             # create rhel_repo:ubi_repo mapping
-            for _repo, sources in zip([repo, debuginfo_repo, srpm_repo],[repo.population_sources,debuginfo_repo.population_sources,srpm_repo.population_sources,]):
+            for _repo, sources in zip(
+                [repo, debuginfo_repo, srpm_repo],
+                [
+                    repo.population_sources,
+                    debuginfo_repo.population_sources,
+                    srpm_repo.population_sources,
+                ],
+            ):
                 for item in sources:
                     repos_map[item] = _repo.id
 
