@@ -75,28 +75,3 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
           verbose: true
-  mypy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
-      - name: Install Tox
-        run: pip install tox 'virtualenv<20.21.1'
-      - name: Run Tox
-        id: mypy-run
-        run: tox -e mypy
-        continue-on-error: true
-      - name: Report if mypy has gone wrong.
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '*Warning*: The **mypy** type checker has found some errors. See the mypy job for details'
-            })
-        if: steps.mypy-run.outcome == 'failure'
