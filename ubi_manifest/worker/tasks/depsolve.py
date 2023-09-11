@@ -1,7 +1,7 @@
 import json
 import logging
-from typing import Dict, List
 from collections import defaultdict
+from typing import Dict, List
 
 import redis
 from pubtools.pulplib import ModulemdDefaultsUnit, ModulemdUnit, RpmUnit

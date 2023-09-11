@@ -2,7 +2,7 @@ from typing import List
 
 import ubiconfig
 from attrs import define
-from pubtools.pulplib import YumRepository, RpmDependency
+from pubtools.pulplib import RpmDependency, YumRepository
 
 
 def create_and_insert_repo(**kwargs):
