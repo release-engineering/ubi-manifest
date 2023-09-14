@@ -1,0 +1,62 @@
+[tool.poetry]
+name = "ubi-manifest"
+version = "0.0.1"
+description = "A service for resolving manifests of UBI content."
+license = "GPL-3.0-or-later"
+readme = "README.md"
+authors = []
+repository="https://github.com/release-engineering/ubi_manifest"
+documentation="http://TODO"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9"
+]
+
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.dependencies]
+python = ">=3.9"
+celery = {version = "*", extras = ["redis"]}
+fastapi = "*"
+pubtools-pulplib = "*"
+attrs = "*"
+more-executors = "*"
+ubi-config = "*"
+
+
+[tool.poetry.group.test]
+optional = true
+
+[tool.poetry.group.test.dependencies]
+pytest = "*"
+httpx = "*"
+testfixtures = "*"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+black = "*"
+pre-commit = "*"
+mypy = "*"
+pylint = "*"
+pytest-cov = "*"
+uvicorn = {version = "*", extras = ["standard"]}
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "*"
+alabaster = "*"
+
+[tool.poetry.group.server]
+optional = true
+
+[tool.poetry.group.server.dependencies]
+uvicorn = {version = "*", extras = ["standard"]}
+gunicorn = "*"
