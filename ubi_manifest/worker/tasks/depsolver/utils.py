@@ -103,7 +103,6 @@ def get_n_latest_from_content(content, blacklist, modular_rpms=None):
 
     out = []
     for rpm_list in name_rpms_maps.values():
-        rpm_list.sort(key=vercmp_sort())
         _keep_n_latest_rpms(rpm_list)
         out.extend(rpm_list)
 
@@ -187,10 +186,11 @@ def is_requirement_resolved(requirement, provider):
 
 def _keep_n_latest_rpms(rpms, n=1):
     """
-    Keep n latest non-modular rpms.
+    Keep n latest non-modular rpms. If there are rpms with different arches
+    only pkgs with `n` highest versions are kept.
 
     Arguments:
-        rpms (List[Rpm]): Sorted, oldest goes first
+        rpms (List[Rpm]): List of rpms
 
     Keyword arguments:
         n (int): Number of non-modular package versions to keep
@@ -200,9 +200,16 @@ def _keep_n_latest_rpms(rpms, n=1):
     """
     # Use a queue of n elements per arch
     pkgs_per_arch = defaultdict(lambda: deque(maxlen=n))
+    
+    allowed_versions = set()
+    for rpm in sorted(rpms, key=vercmp_sort(), reverse=True):
+        allowed_versions.add(rpm.version)
+        
+        if len(allowed_versions) > n:
+            break
 
-    for rpm in rpms:
-        pkgs_per_arch[rpm.arch].append(rpm)
+        if rpm.version in allowed_versions:
+            pkgs_per_arch[rpm.arch].append(rpm)
 
     latest_pkgs_per_arch = list(chain.from_iterable(pkgs_per_arch.values()))
 

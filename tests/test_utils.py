@@ -99,7 +99,7 @@ def test_keep_n_latest_rpms():
     assert rpms[0].version == "11"
 
 
-def test_keep_n_latest_rpms_multiple_arches():
+def test_keep_n_latest_rpms_multiple_arches_default_n():
     """Test keeping only the latest version of rpm for multiple arches"""
 
     unit_1 = get_ubi_unit(
@@ -107,7 +107,7 @@ def test_keep_n_latest_rpms_multiple_arches():
         "test_repo_id",
         name="test",
         version="10",
-        release="20",
+        release="el8",
         arch="x86_64",
     )
     unit_2 = get_ubi_unit(
@@ -115,7 +115,7 @@ def test_keep_n_latest_rpms_multiple_arches():
         "test_repo_id",
         name="test",
         version="11",
-        release="20",
+        release="el8",
         arch="x86_64",
     )
     unit_3 = get_ubi_unit(
@@ -123,20 +123,19 @@ def test_keep_n_latest_rpms_multiple_arches():
         "test_repo_id",
         name="test",
         version="10",
-        release="20",
+        release="el8",
         arch="i686",
     )
     unit_4 = get_ubi_unit(
         RpmUnit,
         "test_repo_id",
         name="test",
-        version="9",
-        release="20",
+        version="11",
+        release="el8",
         arch="i686",
     )
 
     rpms = [unit_1, unit_2, unit_3, unit_4]
-    rpms.sort(key=vercmp_sort())
     _keep_n_latest_rpms(rpms)
 
     # sort by version, the order after _keep_n_latest_rpms() is not guaranteed in this case
@@ -146,12 +145,85 @@ def test_keep_n_latest_rpms_multiple_arches():
     assert len(rpms) == 2
 
     # i686 rpm goes with its highest version
-    assert rpms[0].version == "10"
-    assert rpms[0].arch == "i686"
+    assert rpms[0].version == "11"
+    assert rpms[0].release == "el8"
+    assert rpms[0].arch == "x86_64"
 
     # x86_64 rpm goes with its highest version
     assert rpms[1].version == "11"
-    assert rpms[1].arch == "x86_64"
+    assert rpms[1].release == "el8"
+    assert rpms[1].arch == "i686"
+
+
+# test data setup for test_keep_n_latest_rpms_multiple_arches_different_n()
+def _testdata(n):
+    unit_x86_64_lower = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="test",
+        version="10",
+        release="el8",
+        arch="x86_64",
+    )
+    unit_x86_64_higher = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="test",
+        version="11",
+        release="el8",
+        arch="x86_64",
+    )
+    unit_i686_lower = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="test",
+        version="10",
+        release="el8",
+        arch="i686",
+    )
+    unit_i686_higher = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="test",
+        version="11",
+        release="el8",
+        arch="i686",
+    )
+    unit_noarch = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="test",
+        version="12",
+        release="el8",
+        arch="noarch",
+    )
+    if n == 1:
+        # unit with arch: noarch will only be in output
+        out = [unit_noarch]
+    elif n == 2:
+        # in addition to noarch, the units with x86_64 and i686 arches with the highest version
+        # will be in output
+        out = [unit_noarch, unit_i686_higher, unit_x86_64_higher]
+    elif n >= 3:
+        # all pkgs will be in output
+        out = [unit_noarch, unit_i686_higher, unit_x86_64_higher, unit_i686_lower, unit_x86_64_lower]
+    
+    return n, [unit_x86_64_lower, unit_i686_lower, unit_x86_64_higher, unit_i686_higher, unit_noarch], out
+    
+
+@pytest.mark.parametrize(
+    "n, input, expected_result",
+    [_testdata(1), _testdata(2), _testdata(3)]
+,)
+def test_keep_n_latest_rpms_multiple_arches_different_n(n, input, expected_result):
+    """Test keeping only the latest version of rpm for multiple arches
+    with different `n` parameter"""
+    rpms = input
+    _keep_n_latest_rpms(rpms, n)
+    # there should be specific number of rpms
+    assert len(rpms) == len(expected_result)
+    # check expected result, comparing sets because of unstable sort
+    assert set(rpms) == set(expected_result)
 
 
 def test_flatten_list_of_sets():
