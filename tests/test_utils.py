@@ -206,15 +206,31 @@ def _testdata(n):
         out = [unit_noarch, unit_i686_higher, unit_x86_64_higher]
     elif n >= 3:
         # all pkgs will be in output
-        out = [unit_noarch, unit_i686_higher, unit_x86_64_higher, unit_i686_lower, unit_x86_64_lower]
-    
-    return n, [unit_x86_64_lower, unit_i686_lower, unit_x86_64_higher, unit_i686_higher, unit_noarch], out
-    
+        out = [
+            unit_noarch,
+            unit_i686_higher,
+            unit_x86_64_higher,
+            unit_i686_lower,
+            unit_x86_64_lower,
+        ]
+
+    return (
+        n,
+        [
+            unit_x86_64_lower,
+            unit_i686_lower,
+            unit_x86_64_higher,
+            unit_i686_higher,
+            unit_noarch,
+        ],
+        out,
+    )
+
 
 @pytest.mark.parametrize(
     "n, input, expected_result",
-    [_testdata(1), _testdata(2), _testdata(3)]
-,)
+    [_testdata(1), _testdata(2), _testdata(3)],
+)
 def test_keep_n_latest_rpms_multiple_arches_different_n(n, input, expected_result):
     """Test keeping only the latest version of rpm for multiple arches
     with different `n` parameter"""

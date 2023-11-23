@@ -200,11 +200,11 @@ def _keep_n_latest_rpms(rpms, n=1):
     """
     # Use a queue of n elements per arch
     pkgs_per_arch = defaultdict(lambda: deque(maxlen=n))
-    
+
     allowed_versions = set()
     for rpm in sorted(rpms, key=vercmp_sort(), reverse=True):
         allowed_versions.add(rpm.version)
-        
+
         if len(allowed_versions) > n:
             break
 
