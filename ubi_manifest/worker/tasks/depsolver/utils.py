@@ -200,15 +200,23 @@ def _keep_n_latest_rpms(rpms, n=1):
     """
     # Use a queue of n elements per arch
     pkgs_per_arch = defaultdict(lambda: deque(maxlen=n))
-    
+
     # set of allowed (version, release) tuples
     allowed_ver_rel = set()
     for rpm in sorted(rpms, key=vercmp_sort(), reverse=True):
-        allowed_ver_rel.add((rpm.version, rpm.release,))
+        allowed_ver_rel.add(
+            (
+                rpm.version,
+                rpm.release,
+            )
+        )
         if len(allowed_ver_rel) > n:
             break
 
-        if (rpm.version, rpm.release,) in allowed_ver_rel:
+        if (
+            rpm.version,
+            rpm.release,
+        ) in allowed_ver_rel:
             pkgs_per_arch[rpm.arch].append(rpm)
 
     latest_pkgs_per_arch = list(chain.from_iterable(pkgs_per_arch.values()))

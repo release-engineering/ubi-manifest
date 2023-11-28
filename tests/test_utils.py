@@ -154,6 +154,7 @@ def test_keep_n_latest_rpms_multiple_arches_default_n():
     assert rpms[1].release == "el8"
     assert rpms[1].arch == "i686"
 
+
 def test_keep_n_latest_rpms_multiple_arches_default_n_same_version():
     """Test keeping only the latest version of rpm for multiple arches and
     the same version. Pkgs differ in release, the highest release value
