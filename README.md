@@ -2,8 +2,11 @@
 [![Build Status](https://github.com/release-engineering/ubi-manifest/actions/workflows/tox-test.yml/badge.svg)](https://github.com/release-engineering/ubi-manifest/actions/workflows/tox-test.yml)
 [![codecov](https://codecov.io/gh/release-engineering/ubi-manifest/branch/master/graph/badge.svg?token=EILYTN2NON)](https://codecov.io/gh/release-engineering/ubi-manifest)
 [![Source](https://badgen.net/badge/icon/source?icon=github&label)](https://github.com/release-engineering/ubi-manifest/)
+[![Documentation](https://img.shields.io/website?label=docs&url=https%3A%2F%2Frelease-engineering.github.io%2Fubi-manifest%2F)](https://release-engineering.github.io/ubi-manifest/)
 
 A Flask-based service used by [release-engineering](https://github.com/release-engineering) for resolving manifests of ubi content.
+
+- [Documentation](https://release-engineering.github.io/ubi-manifest/)
  
 Installation
 ------------
