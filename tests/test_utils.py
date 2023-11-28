@@ -144,14 +144,72 @@ def test_keep_n_latest_rpms_multiple_arches_default_n():
     # there should be 2 rpms
     assert len(rpms) == 2
 
-    # i686 rpm goes with its highest version
+    # x86_64 rpm goes with its highest version
     assert rpms[0].version == "11"
     assert rpms[0].release == "el8"
     assert rpms[0].arch == "x86_64"
 
-    # x86_64 rpm goes with its highest version
+    # i686 rpm goes with its highest version
     assert rpms[1].version == "11"
     assert rpms[1].release == "el8"
+    assert rpms[1].arch == "i686"
+
+
+def test_keep_n_latest_rpms_multiple_arches_default_n_same_version():
+    """Test keeping only the latest version of rpm for multiple arches and
+    the same version. Pkgs differ in release, the highest release value
+    goes to output."""
+
+    unit_1 = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="test",
+        version="10",
+        release="1.el8",
+        arch="x86_64",
+    )
+    unit_2 = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="test",
+        version="10",
+        release="2.el8",
+        arch="x86_64",
+    )
+    unit_3 = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="test",
+        version="10",
+        release="1.el8",
+        arch="i686",
+    )
+    unit_4 = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="test",
+        version="10",
+        release="2.el8",
+        arch="i686",
+    )
+
+    rpms = [unit_1, unit_2, unit_3, unit_4]
+    _keep_n_latest_rpms(rpms)
+
+    # sort by version, the order after _keep_n_latest_rpms() is not guaranteed in this case
+    rpms.sort(key=lambda x: x.version)
+
+    # there should be 2 rpms
+    assert len(rpms) == 2
+
+    # x86_64 rpm goes with its highest version and release
+    assert rpms[0].version == "10"
+    assert rpms[0].release == "2.el8"
+    assert rpms[0].arch == "x86_64"
+
+    # i686 rpm goes with its highest version and release
+    assert rpms[1].version == "10"
+    assert rpms[1].release == "2.el8"
     assert rpms[1].arch == "i686"
 
 
