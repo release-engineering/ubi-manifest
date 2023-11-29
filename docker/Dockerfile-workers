@@ -21,11 +21,22 @@ COPY ./conf/app.conf /etc/ubi_manifest/app.conf
 COPY ./conf/certs/* /etc/pki/ca-trust/source/anchors/
 RUN update-ca-trust extract
 
+ENV POETRY_VERSION="1.7.0"\
+    # Let poetry use the virtualenv that comes with the base image
+    POETRY_VIRTUALENVS_CREATE=false\
+    # Path to the virtualenv from base image
+    VIRTUAL_ENV=${APP_ROOT}
+
 COPY . .
 
+# install poetry
+RUN curl -sSL https://install.python-poetry.org | python3 -
 # install specific version of pip due to installation issue with rpm-py-installer
-RUN pip3 install pip==23.0.1
-RUN pip3 install .
+RUN pip install pip==23.0.1
+# install rpm-py-install separately as it does not conform with pep517
+RUN pip install rpm-py-installer==1.2.0 --no-use-pep517
+
+RUN poetry install
 
 # Switch back to unpriviledged user to run the application
 USER 1001
