@@ -17,7 +17,7 @@ from .utils import create_and_insert_repo, rpmdeps_from_names
 
 def test_what_provides(pulp):
     """tests querying for provides in pulp"""
-    depsolver = Depsolver(None, None, None)
+    depsolver = Depsolver(None, None, None, None)
 
     requires = [RpmDependency(name="gcc")]
 
@@ -53,7 +53,7 @@ def test_what_provides(pulp):
 
 def test_extract_and_resolve():
     """test extracting provides and requires from RPM units"""
-    depsolver = Depsolver(None, None, None)
+    depsolver = Depsolver(None, None, None, None)
 
     # set initial data to depsolver instance
     depsolver._requires = rpmdeps_from_names("pkg_a", "pkg_b")
@@ -84,7 +84,7 @@ def test_extract_and_resolve():
 
 def test_get_base_packages(pulp):
     """test queries for input packages for given repo"""
-    depsolver = Depsolver(None, None, None)
+    depsolver = Depsolver(None, None, None, None)
 
     repo = create_and_insert_repo(id="test_repo_id", pulp=pulp)
 
@@ -130,7 +130,7 @@ def test_get_base_packages(pulp):
 
 def test_get_pkgs_from_all_modules(pulp):
     """tests getting pkgs filenames from all available modulemd units"""
-    depsolver = Depsolver(None, None, None)
+    depsolver = Depsolver(None, None, None, None)
 
     repo = create_and_insert_repo(id="test_repo_1", pulp=pulp)
 
@@ -186,7 +186,7 @@ def test_get_pkgs_from_all_modules(pulp):
 )
 def test_batch_size(items, expected_batch_size):
     """test proper calculation of a batch size"""
-    depsolver = Depsolver(None, None, None)
+    depsolver = Depsolver(None, None, None, None)
     depsolver._unsolved = {x for x in range(items)}
 
     batch_size = depsolver._batch_size()
@@ -226,12 +226,13 @@ def test_run(pulp):
 
     module_rpms = {
         "perl-version-1.99.24-441.module+el8.4.0+9911+7f269185.x86_64.rpm",
-        "yaml-version-0.99.24-441.module+el8.4.0+9911+7f269185.src.rpm",
         "perl-version-0.99.24-441.module+el8.3.0+6718+7f269185.x86_64.rpm",
     }
 
+    modular_filenames = set()
+
     with LogCapture() as mock_log:
-        with Depsolver([dep_item_1, dep_item_2], [repo_srpm], module_rpms) as depsolver:
+        with Depsolver([dep_item_1, dep_item_2], [repo_srpm], module_rpms, modular_filenames) as depsolver:
             depsolver.run()
 
             # check internal state of depsolver object
@@ -526,18 +527,6 @@ def _prepare_test_data(pulp):
     )
 
     unit_13 = RpmUnit(
-        name="yaml",
-        filename="yaml-version-0.99.24-441.module+el8.4.0+9911+7f269185.src.rpm",
-        version="000",
-        release="099",
-        epoch="1",
-        arch="x86_64",
-        provides=[],
-        requires=[],
-        content_type_id="srpm",
-    )
-
-    unit_14 = RpmUnit(
         name="blacklisted-package",
         version="100",
         release="200",
@@ -549,11 +538,11 @@ def _prepare_test_data(pulp):
 
     repo_1_units = [unit_1, unit_2, unit_5, unit_11a, unit_11b, unit_11c, unit_12]
     repo_2_units = [unit_3, unit_4, unit_6]
-    repo_srpm_units = [unit_9, unit_10, unit_13]
+    repo_srpm_units = [unit_9, unit_10]
 
     pulp.insert_units(repo_1, repo_1_units + [md_unit_1, md_unit_2])
     pulp.insert_units(
-        repo_2, repo_2_units + [unit_7, unit_8, unit_14]
+        repo_2, repo_2_units + [unit_7, unit_8, unit_13]
     )  # add extra units, that will be excluded by blacklist
 
     pulp.insert_units(repo_srpm, repo_srpm_units)
@@ -572,7 +561,7 @@ def test_export():
     Tests that exported units from depsolver includes identical rpms, if they come
     from different repos.
     """
-    depsolver = Depsolver(None, None, None)
+    depsolver = Depsolver(None, None, None, None)
 
     rpm = RpmUnit(
         name="test",
@@ -628,9 +617,9 @@ def test_export():
 
 
 def test_run_modular_deps(pulp):
-    """test the main method of depsolver using scenario when a non-modular RPM can theoretically be resolved a modular
-    RPM dependency, but we need to resolve a non-modular RPMs with
-    non-modular dependency otherwise we could end with uninstallable
+    """test the main method of depsolver using scenario when a non-modular RPM can
+    theoretically be resolved a modular RPM dependency, but we need to resolve a
+    non-modular RPMs with non-modular dependency otherwise we could end with uninstallable
     package"""
     (
         repo,
@@ -651,7 +640,9 @@ def test_run_modular_deps(pulp):
         "nginx-core-1.22.1-3.module+el9.2.0+17617+2f289c6c.x86_64.rpm",
     }
 
-    with Depsolver([dep_item], [], module_rpms) as depsolver:
+    modular_filenames = set()
+
+    with Depsolver([dep_item], [], module_rpms, modular_filenames) as depsolver:
         depsolver.run()
         # check internal state of depsolver object
         # provides set holds all capabilities that we went through during depsolving
@@ -820,7 +811,7 @@ def test_run_with_skipped_depsolving(pulp):
     flags = {
         "base_pkgs_only": True,
     }
-    with Depsolver([dep_item], [repo_srpm], [], **flags) as depsolver:
+    with Depsolver([dep_item], [repo_srpm], [], set(), **flags) as depsolver:
         depsolver.run()
         # check internal state of depsolver object
         # with provided flag base_pkgs_only:True we don't store any of provides|requires
@@ -929,7 +920,7 @@ def test_log_missing_base_pkgs(pulp):
             in_pulp_repos=[repo_rpm],
         )
 
-        with Depsolver([dep_item], [], []) as depsolver:
+        with Depsolver([dep_item], [], [], set()) as depsolver:
             depsolver.run()
             # logger should warn when the pkgs from whitelist weren't found
             mock_log.check_present(

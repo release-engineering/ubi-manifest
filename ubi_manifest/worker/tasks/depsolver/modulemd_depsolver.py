@@ -23,7 +23,6 @@ class ModularDepsolver:
     """
     Class for depsolving modulemd units
     """
-
     def __init__(self, modular_items: List[ModularDepsolverItem]) -> None:
         self._modular_items: List[ModularDepsolverItem] = modular_items
         self._input_repos: List[YumRepository] = list(
@@ -126,7 +125,7 @@ class ModularDepsolver:
             self._searched_modules["with_stream"].add(f"{module.name}:{module.stream}")
 
     def _already_searched(self, module):
-        """Returns True if the module has not yet been searched for"""
+        """Returns True if the module has already been searched for"""
         return (
             module.name in self._searched_modules["without_stream"]
             or f"{module.name}:{module.stream}" in self._searched_modules["with_stream"]
@@ -134,13 +133,14 @@ class ModularDepsolver:
 
     def _update_rpm_dependencies(self, module):
         """
-        Adds all pkgs from artifacts to rpm dependencies. Omits source pkgs and
-        filters by profiles if available.
+        Adds pkgs from module artifacts to rpm dependencies. Filters by profiles if available.
+        Skips source packages since they are searched for separately in rpm_depsolver.
         """
         if module.artifacts:
             pkg_names = []
-            key = f"{module.name}:{module.stream}"
+
             if module.profiles:
+                key = f"{module.name}:{module.stream}"
                 for profile in self._profiles.get(key) or []:
                     pkg_names.extend(module.profiles.get(profile) or [])
 
@@ -150,8 +150,11 @@ class ModularDepsolver:
                     name, _, _, _, _ = split_filename(pkg)
                     if name not in pkg_names:
                         continue
-
-                self.rpm_dependencies.add(pkg)
+                # skip source rpms
+                if ".src.rpm" in pkg:
+                    continue
+                else:
+                    self.rpm_dependencies.add(pkg)
 
     def export(self) -> Dict[str, Dict[str, List[UbiUnit]]]:
         """Returns a dictionary of depsolved modules and their rpm dependencies."""

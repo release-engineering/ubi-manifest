@@ -72,6 +72,8 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
                 for item in sources:
                     repos_map[item] = _repo.id
 
+            in_source_rpm_repos.extend(_get_population_sources(client, srpm_repo))
+
             cs_repo_map, cs_debug_repo_map = _get_population_sources_per_cs(
                 client, repo
             )
@@ -87,8 +89,6 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
                 whitelist, debuginfo_whitelist = _filter_whitelist(config)
                 blacklist = parse_blacklist_config(config)
                 depsolver_flags[(repo.id, input_cs)] = config.flags.as_dict()
-
-                in_source_rpm_repos.extend(_get_population_sources(client, srpm_repo))
 
                 dep_map[(repo.id, input_cs)] = DepsolverItem(
                     whitelist,
@@ -109,7 +109,8 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
                 )
 
         flags = validate_depsolver_flags(depsolver_flags)
-        # run modular depsolver
+
+        # run modulemd depsolver
         _LOG.info(
             "Running MODULEMD depsolver for repos: %s",
             [item[0] for item in mod_dep_map.keys()],
@@ -117,6 +118,14 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
         modulemd_out = _run_modulemd_depsolver(list(mod_dep_map.values()), repos_map)
         out = modulemd_out["modules_out"]
         modulemd_rpm_deps = modulemd_out["rpm_dependencies"]
+
+        # The rpm Depsolver separately depsolves rpms first from binary repos and then debug repos.
+        # In both cases it needs a list of modular rpm filenames. However, these are only found
+        # in modulemd units which are present only in binary repos. Therefore the list of
+        # modular_rpm_filenames is passed as a parameter to the Depsolver and during the first run
+        # (with binary repos) is populated. In the second run (with debug repos) it just uses the
+        # obtained values from the first run.
+        modular_rpm_filenames = set()
 
         # run depsolver for binary repos
         _LOG.info(
@@ -130,6 +139,7 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
             repos_map,
             in_source_rpm_repos,
             modulemd_rpm_deps,
+            modular_rpm_filenames,
             flags,
         )
 
@@ -147,13 +157,15 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
             repos_map,
             in_source_rpm_repos,
             modulemd_rpm_deps,
+            modular_rpm_filenames,
             flags,
         )
+
     # merge 'out' and 'debuginfo_out' dicts without overwriting any entry
     _merge_output_dictionary(out, debuginfo_out)
 
     # make sure that there are all ubi repositories in the 'out' dictionary set a keys
-    # repositories with empty manifest are ommited from previous processing
+    # repositories with empty manifest are omitted from previous processing
     for repo_id in repos_map.values():
         if repo_id not in out:
             out[repo_id] = []
@@ -241,10 +253,10 @@ def _get_population_sources(client, repo):
 
 
 def _run_depsolver(
-    depsolver_items, repos_map, in_source_rpm_repos, modulemd_deps, flags
+    depsolver_items, repos_map, in_source_rpm_repos, modulemd_deps, modular_rpm_filenames, flags
 ):
     with Depsolver(
-        depsolver_items, in_source_rpm_repos, modulemd_deps, **flags
+        depsolver_items, in_source_rpm_repos, modulemd_deps, modular_rpm_filenames, **flags
     ) as depsolver:
         depsolver.run()
         exported = depsolver.export()
