@@ -381,7 +381,7 @@ def _prepare_pulp(pulp):
     # Filter out .src modular rpms
     expected_modular_rpms = set(
         filter(
-            lambda x: not "not-in-profile" in x,
+            lambda x: not "not-in-profile" in x and ".src.rpm" not in x,
             modular_rpms,
         )
     )
