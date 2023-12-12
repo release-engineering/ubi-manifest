@@ -232,7 +232,9 @@ def test_run(pulp):
     modular_filenames = set()
 
     with LogCapture() as mock_log:
-        with Depsolver([dep_item_1, dep_item_2], [repo_srpm], module_rpms, modular_filenames) as depsolver:
+        with Depsolver(
+            [dep_item_1, dep_item_2], [repo_srpm], module_rpms, modular_filenames
+        ) as depsolver:
             depsolver.run()
 
             # check internal state of depsolver object

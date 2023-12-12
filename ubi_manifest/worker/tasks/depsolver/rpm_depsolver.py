@@ -69,6 +69,7 @@ class Depsolver:
         """
         Search for modulemds in all input repos and extract rpm filenames.
         """
+
         def extract_modular_filenames():
             filenames = set()
             for module in modules:
@@ -85,7 +86,9 @@ class Depsolver:
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
-        newest_rpms = get_n_latest_from_content(content, blacklist, self._modular_rpm_filenames)
+        newest_rpms = get_n_latest_from_content(
+            content, blacklist, self._modular_rpm_filenames
+        )
 
         return newest_rpms
 
@@ -149,7 +152,9 @@ class Depsolver:
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
-        newest_rpms = get_n_latest_from_content(content, blacklist, self._modular_rpm_filenames)
+        newest_rpms = get_n_latest_from_content(
+            content, blacklist, self._modular_rpm_filenames
+        )
 
         return newest_rpms
 
@@ -183,7 +188,9 @@ class Depsolver:
 
         # Get modular rpms if they are not already populated from the previous run of the depsolver
         if not self._modular_rpm_filenames:
-            self._modular_rpm_filenames.update(self._get_pkgs_from_all_modules(pulp_repos))
+            self._modular_rpm_filenames.update(
+                self._get_pkgs_from_all_modules(pulp_repos)
+            )
 
         merged_blacklist = list(
             chain.from_iterable([repo.blacklist for repo in self.repos])
@@ -200,7 +207,7 @@ class Depsolver:
             for repo in self.repos
         ]
 
-        #Get modulemd binary/debug rpm dependencies
+        # Get modulemd binary/debug rpm dependencies
         if self.modulemd_dependencies:
             content_fts.append(
                 self._executor.submit(

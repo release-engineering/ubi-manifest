@@ -253,10 +253,19 @@ def _get_population_sources(client, repo):
 
 
 def _run_depsolver(
-    depsolver_items, repos_map, in_source_rpm_repos, modulemd_deps, modular_rpm_filenames, flags
+    depsolver_items,
+    repos_map,
+    in_source_rpm_repos,
+    modulemd_deps,
+    modular_rpm_filenames,
+    flags,
 ):
     with Depsolver(
-        depsolver_items, in_source_rpm_repos, modulemd_deps, modular_rpm_filenames, **flags
+        depsolver_items,
+        in_source_rpm_repos,
+        modulemd_deps,
+        modular_rpm_filenames,
+        **flags,
     ) as depsolver:
         depsolver.run()
         exported = depsolver.export()

@@ -23,6 +23,7 @@ class ModularDepsolver:
     """
     Class for depsolving modulemd units
     """
+
     def __init__(self, modular_items: List[ModularDepsolverItem]) -> None:
         self._modular_items: List[ModularDepsolverItem] = modular_items
         self._input_repos: List[YumRepository] = list(
