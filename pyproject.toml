@@ -26,6 +26,7 @@ pubtools-pulplib = "*"
 attrs = "*"
 more-executors = "*"
 ubi-config = "*"
+rpmdyn = "*"
 
 
 [tool.poetry.group.test]
