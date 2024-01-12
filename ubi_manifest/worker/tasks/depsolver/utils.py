@@ -1,12 +1,13 @@
 import os
 import re
+from collections import defaultdict, deque
 from itertools import chain
 from logging import getLogger
 from typing import Dict, List, Tuple
-from collections import defaultdict, deque
 
-from ubiconfig import UbiConfig
 from pubtools.pulplib import Client, Criteria, Matcher, RpmDependency
+from ubiconfig import UbiConfig
+
 from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude
 
 _LOG = getLogger(__name__)
