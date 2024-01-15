@@ -6,12 +6,17 @@ from logging import getLogger
 from typing import Dict, List, Tuple
 
 from pubtools.pulplib import Client, Criteria, Matcher, RpmDependency
-from rpm import labelCompare as label_compare  # pylint: disable=no-name-in-module
 from ubiconfig import UbiConfig
 
 from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude
 
 _LOG = getLogger(__name__)
+
+try:
+    from rpm import labelCompare as label_compare  # pylint: disable=no-name-in-module
+except ImportError as ex:  # pragma: no cover
+    _LOG.error("Cannot import rpm module, please install rpm python bindings")
+
 
 OPEN_END_ONE_OR_MORE_PAR_REGEX = re.compile(r"^\(+|\)+$")
 OPERATOR_BOOL_REGEX = re.compile(r"if|else|and|or|unless|with|without")

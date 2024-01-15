@@ -27,10 +27,6 @@ COPY . .
 
 # install poetry
 RUN curl -sSL https://install.python-poetry.org | python3 -
-# install specific version of pip due to installation issue with rpm-py-installer
-RUN pip install pip==23.0.1
-# install rpm-py-install separately as it does not conform with pep517
-RUN pip install rpm-py-installer==1.2.0 --no-use-pep517
 
 RUN poetry install --with server
 
