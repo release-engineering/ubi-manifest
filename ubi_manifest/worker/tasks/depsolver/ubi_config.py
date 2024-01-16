@@ -1,4 +1,4 @@
-from typing import List
+from typing import Optional, Any
 
 import ubiconfig
 
@@ -10,17 +10,17 @@ class UbiConfigLoader:
 
     def __init__(self, url: str) -> None:
         self._url: str = url
-        self._config_map: dict = {}
-        self._all_config: List[ubiconfig.UbiConfig] = None
+        self._config_map: dict[tuple[str, str, str], ubiconfig.UbiConfig] = {}
+        self._all_config: Optional[list[ubiconfig.UbiConfig]] = None
 
     @property
-    def all_config(self) -> List[ubiconfig.UbiConfig]:
+    def all_config(self) -> list[ubiconfig.UbiConfig]:
         if self._all_config is None:
             self._all_config = self._load_all()
 
         return self._all_config
 
-    def _load_all(self) -> List[ubiconfig.UbiConfig]:
+    def _load_all(self) -> Any:
         loader = ubiconfig.get_loader(self._url)
         return loader.load_all()
 
@@ -46,7 +46,7 @@ class UbiConfigLoader:
         return out
 
     @staticmethod
-    def _content_sets(config: ubiconfig.UbiConfig) -> List[str]:
+    def _content_sets(config: ubiconfig.UbiConfig) -> list[tuple[str, str]]:
         return [
             (
                 config.content_sets.rpm.input,

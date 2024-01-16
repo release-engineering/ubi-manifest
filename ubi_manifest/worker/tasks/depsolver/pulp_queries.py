@@ -1,7 +1,16 @@
 import os
-
+from concurrent.futures import Future
+from typing import Optional
 from more_executors.futures import f_flat_map, f_map, f_proxy, f_return, f_sequence
-from pubtools.pulplib import Criteria, ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
+from pubtools.pulplib import (
+    Criteria,
+    ModulemdDefaultsUnit,
+    ModulemdUnit,
+    RpmUnit,
+    YumRepository,
+    Unit,
+    Page,
+)
 
 from .models import UbiUnit
 from .utils import flatten_list_of_sets
@@ -27,7 +36,12 @@ UNIT_FIELDS = {
 }
 
 
-def _search_units(repo, criteria_list, content_type_cls, batch_size_override=None):
+def _search_units(
+    repo: YumRepository,
+    criteria_list: list[Criteria],
+    content_type_cls: Unit,
+    batch_size_override: Optional[int] = None,
+) -> Future[set[UbiUnit]]:
     """
     Search for units of one content type associated with given repository by criteria.
     """
@@ -35,7 +49,7 @@ def _search_units(repo, criteria_list, content_type_cls, batch_size_override=Non
     batch_size = batch_size_override or BATCH_SIZE
     unit_fields = UNIT_FIELDS.get(content_type_cls, None)
 
-    def handle_results(page):
+    def handle_results(page: Page) -> Future[set[UbiUnit]]:
         for unit in page.data:
             unit = UbiUnit(unit, repo.id)
             units.add(unit)
@@ -64,8 +78,11 @@ def _search_units(repo, criteria_list, content_type_cls, batch_size_override=Non
 
 
 def _search_units_per_repos(
-    or_criteria, repos, content_type_cls, batch_size_override=None
-):
+    or_criteria: list[Criteria],
+    repos: list[YumRepository],
+    content_type_cls: Unit,
+    batch_size_override: Optional[int] = None,
+) -> Future[set[UbiUnit]]:
     units = []
     for repo in repos:
         units.append(
@@ -80,7 +97,11 @@ def _search_units_per_repos(
     return f_proxy(f_map(f_sequence(units), flatten_list_of_sets))
 
 
-def search_modulemds(or_criteria, repos, batch_size_override=None):
+def search_modulemds(
+    or_criteria: list[Criteria],
+    repos: list[YumRepository],
+    batch_size_override: Optional[int] = None,
+) -> Future[set[UbiUnit]]:
     return _search_units_per_repos(
         or_criteria,
         repos,
@@ -89,7 +110,11 @@ def search_modulemds(or_criteria, repos, batch_size_override=None):
     )
 
 
-def search_rpms(or_criteria, repos, batch_size_override=None):
+def search_rpms(
+    or_criteria: list[Criteria],
+    repos: list[YumRepository],
+    batch_size_override: Optional[int] = None,
+) -> Future[set[UbiUnit]]:
     return _search_units_per_repos(
         or_criteria,
         repos,
@@ -98,7 +123,11 @@ def search_rpms(or_criteria, repos, batch_size_override=None):
     )
 
 
-def search_modulemd_defaults(or_criteria, repos, batch_size_override=None):
+def search_modulemd_defaults(
+    or_criteria: list[Criteria],
+    repos: list[YumRepository],
+    batch_size_override: Optional[int] = None,
+) -> Future[set[UbiUnit]]:
     return _search_units_per_repos(
         or_criteria,
         repos,

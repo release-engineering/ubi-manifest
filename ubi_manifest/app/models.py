@@ -1,10 +1,8 @@
-from typing import List
-
 from pydantic import BaseModel  # pylint: disable=no-name-in-module
 
 
 class DepsolveItem(BaseModel):
-    repo_ids: List[str]
+    repo_ids: list[str]
 
 
 class TaskState(BaseModel):
@@ -21,4 +19,4 @@ class DepsolverResultItem(BaseModel):
 
 class DepsolverResult(BaseModel):
     repo_id: str
-    content: List[DepsolverResultItem]
+    content: list[DepsolverResultItem]

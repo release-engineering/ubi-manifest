@@ -1,10 +1,19 @@
 import json
 import logging
 from collections import defaultdict
-from typing import Dict, List
+from collections.abc import Iterable
+from concurrent.futures import Future
+from typing import Any
+from ubiconfig import UbiConfig
 
 import redis
-from pubtools.pulplib import ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
+from pubtools.pulplib import (
+    ModulemdDefaultsUnit,
+    ModulemdUnit,
+    RpmUnit,
+    Client,
+    YumRepository,
+)
 
 from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.tasks.depsolver.models import (
@@ -33,8 +42,8 @@ class InconsistentDepsolverConfig(Exception):
     pass
 
 
-@app.task
-def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
+@app.task  # type: ignore [misc]  # ignore untyped decorator
+def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
     """
     Run depsolvers for given ubi_repo_ids - it's expected that id of binary
     repositories are provided. Debuginfo and SRPM repos related to those ones
@@ -125,7 +134,7 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
         # modular_rpm_filenames is passed as a parameter to the Depsolver and during the first run
         # (with binary repos) is populated. In the second run (with debug repos) it just uses the
         # obtained values from the first run.
-        modular_rpm_filenames = set()
+        modular_rpm_filenames: set[str] = set()
 
         # run depsolver for binary repos
         _LOG.info(
@@ -173,10 +182,14 @@ def depsolve_task(ubi_repo_ids: List[str], content_config_url: str) -> None:
     _save(out)
 
 
-def _update_debug_whitelist(client, output_set, debug_dep_map):
+def _update_debug_whitelist(
+    client: Client,
+    output_dict: dict[str, list[UbiUnit]],
+    debug_dep_map: dict[tuple[str, str], DepsolverItem],
+) -> None:
     # generate missing debuginfo packages
     # TODO this seems to generate too many debuginfo packages - fix after tests with real data
-    for ubi_repo_id, pkg_list in output_set.items():
+    for ubi_repo_id, pkg_list in output_dict.items():
         debuginfo_to_add = set()
         for pkg in pkg_list:
             # inspired with pungi depsolver
@@ -195,7 +208,7 @@ def _update_debug_whitelist(client, output_set, debug_dep_map):
             ].whitelist.update(debuginfo_to_add)
 
 
-def _save(data: Dict[str, List[UbiUnit]]) -> None:
+def _save(data: dict[str, list[UbiUnit]]) -> None:
     redis_client = redis.from_url(app.conf.result_backend)
 
     data_for_redis = {}
@@ -233,7 +246,7 @@ def _save(data: Dict[str, List[UbiUnit]]) -> None:
         )
 
 
-def _filter_whitelist(ubi_config):
+def _filter_whitelist(ubi_config: UbiConfig) -> tuple[set[str], set[str]]:
     whitelist = set()
     debuginfo_whitelist = set()
 
@@ -248,18 +261,18 @@ def _filter_whitelist(ubi_config):
     return whitelist, debuginfo_whitelist
 
 
-def _get_population_sources(client, repo):
+def _get_population_sources(client: Client, repo: YumRepository) -> list[YumRepository]:
     return [client.get_repository(repo_id) for repo_id in repo.population_sources]
 
 
 def _run_depsolver(
-    depsolver_items,
-    repos_map,
-    in_source_rpm_repos,
-    modulemd_deps,
-    modular_rpm_filenames,
-    flags,
-):
+    depsolver_items: list[DepsolverItem],
+    repos_map: dict[str, str],
+    in_source_rpm_repos: list[Future[YumRepository]],
+    modulemd_deps: set[str],
+    modular_rpm_filenames: set[str],
+    flags: dict[str, Any],
+) -> dict[str, list[UbiUnit]]:
     with Depsolver(
         depsolver_items,
         in_source_rpm_repos,
@@ -273,7 +286,9 @@ def _run_depsolver(
     return out
 
 
-def _run_modulemd_depsolver(modular_items, repos_map):
+def _run_modulemd_depsolver(
+    modular_items: list[ModularDepsolverItem], repos_map: dict[str, str]
+) -> dict[str, Any]:
     with ModularDepsolver(modular_items) as depsolver:
         depsolver.run()
         out = depsolver.export()
@@ -281,7 +296,9 @@ def _run_modulemd_depsolver(modular_items, repos_map):
     return out
 
 
-def _merge_output_dictionary(out, update):
+def _merge_output_dictionary(
+    out: dict[str, list[UbiUnit]], update: dict[str, list[UbiUnit]]
+) -> None:
     """
     Appends to lists in out.values() instead of overwriting them
     WARNING: This works correctly only with RpmUnit values
@@ -301,7 +318,9 @@ def _merge_output_dictionary(out, update):
             out[key] = data
 
 
-def _get_population_sources_per_cs(client, repo):
+def _get_population_sources_per_cs(
+    client: Client, repo: YumRepository
+) -> tuple[dict[str, list[YumRepository]], dict[str, list[YumRepository]]]:
     rpm_sources = defaultdict(list)
     debug_sources = defaultdict(list)
     for repo_id in repo.population_sources:
@@ -315,7 +334,9 @@ def _get_population_sources_per_cs(client, repo):
     return rpm_sources, debug_sources
 
 
-def _get_content_config(ubi_config_loader, input_cs, output_cs, version):
+def _get_content_config(
+    ubi_config_loader: UbiConfigLoader, input_cs: str, output_cs: str, version: str
+) -> UbiConfig:
     out = None
     # get proper ubi_config for given input and output content sets and a version
     # fallback to default version if there is no match for requested config
@@ -330,7 +351,9 @@ def _get_content_config(ubi_config_loader, input_cs, output_cs, version):
     return out
 
 
-def validate_depsolver_flags(depsolver_flags):
+def validate_depsolver_flags(
+    depsolver_flags: dict[tuple[str, str], dict[str, Any]]
+) -> dict[str, Any]:
     """
     Validate all acquired flags, they have to be consistent for all repositories
     we are processing in one depsolve task otherwise an exception is raised.

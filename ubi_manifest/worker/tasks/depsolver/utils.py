@@ -1,14 +1,16 @@
+from __future__ import annotations
 import os
 import re
 from collections import defaultdict, deque
 from itertools import chain
 from logging import getLogger
-from typing import Dict, List, Tuple
+from typing import Any, Optional
 
 from pubtools.pulplib import Client, Criteria, Matcher, RpmDependency
 from ubiconfig import UbiConfig
 
-from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude
+from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
+
 
 _LOG = getLogger(__name__)
 
@@ -31,14 +33,11 @@ RELATION_CMP_MAP = {
 }
 
 
-def make_pulp_client(config):
-    kwargs = {
-        "verify": config.get("pulp_verify"),
-    }
-
+def make_pulp_client(config: dict[str, Any]) -> Client:
+    kwargs = {"verify": config.get("pulp_verify")}
     cert, key = config.get("pulp_cert"), config.get("pulp_key")
     # check cert/key for presence, if present assume cert/key for pulp auth
-    if os.path.isfile(cert) and os.path.isfile(key):
+    if os.path.isfile(cert) and os.path.isfile(key):  # type: ignore [arg-type]
         kwargs["cert"] = (cert, key)
 
     # if cert/key not present, use user/pass auth to pulp
@@ -48,13 +47,15 @@ def make_pulp_client(config):
     return Client(config.get("pulp_url"), **kwargs)
 
 
-def create_or_criteria(fields, values):
-    # fields - list/tuple of fields [field1, field2]
+def create_or_criteria(
+    fields: list[str], values: list[tuple[Any, ...]]
+) -> list[Criteria]:
+    # fields - list of fields [field1, field2]
     # values - list of tuples [(field1 value, field2 value), ...]
     # creates criteria for pulp query in a following way
     # one tuple in values uses AND logic
     # each criteria for one tuple are agregated by to or_criteria list
-    or_criteria = []
+    or_criteria: list[Criteria] = []
 
     for val_tuple in values:
         inner_and_criteria = []
@@ -68,7 +69,7 @@ def create_or_criteria(fields, values):
     return or_criteria
 
 
-def flatten_list_of_sets(list_of_sets):
+def flatten_list_of_sets(list_of_sets: list[set[Any]]) -> set[Any]:
     out = set()
     for one_set in list_of_sets:
         out |= one_set
@@ -76,25 +77,27 @@ def flatten_list_of_sets(list_of_sets):
     return out
 
 
-def _is_blacklisted(package, blacklist):
+def _is_blacklisted(package: UbiUnit, blacklist: list[PackageToExclude]) -> bool:
     for item in blacklist:
-        blacklisted = False
-        if item.globbing:
-            if package.name.startswith(item.name):
-                blacklisted = True
-        else:
-            if package.name == item.name:
-                blacklisted = True
         if item.arch:
             if package.arch != item.arch:
-                blacklisted = False
+                continue
 
-        if blacklisted:
-            return blacklisted
+        if item.globbing:
+            if package.name.startswith(item.name):
+                return True
+        else:
+            if package.name == item.name:
+                return True
+    return False
 
 
-def get_n_latest_from_content(content, blacklist, modular_rpms=None):
-    name_rpms_maps = {}
+def get_n_latest_from_content(
+    content: set[UbiUnit],
+    blacklist: list[PackageToExclude],
+    modular_rpms: Optional[set[str]] = None,
+) -> list[UbiUnit]:
+    name_rpms_maps: dict[str, list[UbiUnit]] = {}
     for item in content:
         if modular_rpms:
             if item.filename in modular_rpms:
@@ -114,7 +117,7 @@ def get_n_latest_from_content(content, blacklist, modular_rpms=None):
     return out
 
 
-def parse_bool_deps(bool_dependency):
+def parse_bool_deps(bool_dependency: str) -> set[RpmDependency]:
     """Parses boolean/rich dependency clause and returns set of names of packages"""
     to_parse = bool_dependency.split()
 
@@ -149,38 +152,38 @@ def parse_bool_deps(bool_dependency):
     return out
 
 
-def vercmp_sort():
+def vercmp_sort() -> Any:
     class Klass:
-        def __init__(self, package):
+        def __init__(self, package: UbiUnit):
             self.evr_tuple = (package.epoch, package.version, package.release)
 
-        def __lt__(self, other):
+        def __lt__(self, other: Klass) -> Any:
             return label_compare(self.evr_tuple, other.evr_tuple) < 0
 
-        def __gt__(self, other):
+        def __gt__(self, other: Klass) -> Any:
             return label_compare(self.evr_tuple, other.evr_tuple) > 0
 
-        def __eq__(self, other):
+        def __eq__(self, other: Klass) -> Any:  # type: ignore[override]
             return label_compare(self.evr_tuple, other.evr_tuple) == 0
 
-        def __le__(self, other):
+        def __le__(self, other: Klass) -> Any:
             return label_compare(self.evr_tuple, other.evr_tuple) <= 0
 
-        def __ge__(self, other):
+        def __ge__(self, other: Klass) -> Any:
             return label_compare(self.evr_tuple, other.evr_tuple) >= 0
 
-        def __ne__(self, other):
+        def __ne__(self, other: Klass) -> Any:  # type: ignore[override]
             return label_compare(self.evr_tuple, other.evr_tuple) != 0
 
     return Klass
 
 
-def is_requirement_resolved(requirement, provider):
+def is_requirement_resolved(requirement: RpmDependency, provider: RpmDependency) -> Any:
     if requirement.flags:
         req_evr = (requirement.epoch, requirement.version, requirement.release)
         prov_evr = (provider.epoch, provider.version, provider.release)
         # compare provider with requirement
-        out = RELATION_CMP_MAP[requirement.flags](prov_evr, req_evr)
+        out = RELATION_CMP_MAP[requirement.flags](prov_evr, req_evr)  # type: ignore [no-untyped-call]
 
     else:
         # without flags we just compare names
@@ -189,13 +192,13 @@ def is_requirement_resolved(requirement, provider):
     return out
 
 
-def _keep_n_latest_rpms(rpms, n=1):
+def _keep_n_latest_rpms(rpms: list[UbiUnit], n: int = 1) -> None:
     """
     Keep n latest non-modular rpms. If there are rpms with different arches
     only pkgs with `n` highest versions are kept.
 
     Arguments:
-        rpms (List[Rpm]): List of rpms
+        rpms (list[Rpm]): List of rpms
 
     Keyword arguments:
         n (int): Number of non-modular package versions to keep
@@ -204,7 +207,7 @@ def _keep_n_latest_rpms(rpms, n=1):
         None. The packages list is changed in-place
     """
     # Use a queue of n elements per arch
-    pkgs_per_arch = defaultdict(lambda: deque(maxlen=n))
+    pkgs_per_arch: dict[str, Any] = defaultdict(lambda: deque(maxlen=n))
 
     # set of allowed (version, release) tuples
     allowed_ver_rel = set()
@@ -230,7 +233,7 @@ def _keep_n_latest_rpms(rpms, n=1):
 
 
 # borrowed from https://github.com/rpm-software-management/yum
-def split_filename(filename: str) -> Tuple[str]:
+def split_filename(filename: str) -> tuple[str, ...]:
     """
     Pass in a standard style rpm fullname
 
@@ -263,8 +266,10 @@ def split_filename(filename: str) -> Tuple[str]:
     return name, ver, rel, epoch, arch
 
 
-def remap_keys(mapping: Dict, dict_to_remap: Dict) -> Dict:
-    out = {}
+def remap_keys(
+    mapping: dict[str, str], dict_to_remap: dict[str, list[UbiUnit]]
+) -> dict[str, list[UbiUnit]]:
+    out: dict[str, list[UbiUnit]] = {}
     for k, v in dict_to_remap.items():
         new_key = mapping[k]
         out.setdefault(new_key, []).extend(v)
@@ -272,7 +277,7 @@ def remap_keys(mapping: Dict, dict_to_remap: Dict) -> Dict:
     return out
 
 
-def parse_blacklist_config(ubi_config: UbiConfig) -> List[PackageToExclude]:
+def parse_blacklist_config(ubi_config: UbiConfig) -> list[PackageToExclude]:
     packages_to_exclude = []
     for package_pattern in ubi_config.packages.blacklist:
         globbing = package_pattern.name.endswith("*")
@@ -287,7 +292,7 @@ def parse_blacklist_config(ubi_config: UbiConfig) -> List[PackageToExclude]:
     return packages_to_exclude
 
 
-def keep_n_latest_modules(modules, n=1):
+def keep_n_latest_modules(modules: list[UbiUnit], n: int = 1) -> None:
     """
     Keeps n latest modules in modules sorted list
     """
@@ -301,12 +306,12 @@ def keep_n_latest_modules(modules, n=1):
     modules[:] = modules_to_keep
 
 
-def get_modulemd_output_set(modules):
+def get_modulemd_output_set(modules: set[UbiUnit]) -> list[UbiUnit]:
     """
     Take all modular packages and for each package and stream return only the
     latest version of it.
     """
-    name_stream_modules_map = {}
+    name_stream_modules_map: dict[str, list[UbiUnit]] = {}
     # create internal dict structure for easier sorting
     # mapping "name + stream": list of modules
     for modulemd in modules:
@@ -323,7 +328,7 @@ def get_modulemd_output_set(modules):
     return out
 
 
-def get_criteria_for_modules(modules):
+def get_criteria_for_modules(modules: list[UbiUnit]) -> list[Criteria]:
     """
     Creates OR criteria that search for all modules by name and stream. If the
     module has empty stream field, all modules with the corresponding name will be matched.
@@ -345,6 +350,6 @@ def get_criteria_for_modules(modules):
                 )
             )
 
-    fields = ("name", "stream")
+    fields = ["name", "stream"]
     or_criteria = create_or_criteria(fields, criteria_values)
     return or_criteria
