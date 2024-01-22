@@ -1,7 +1,7 @@
-from typing import Optional, Any
+from typing import Any, Optional
 
 from attrs import define
-from pubtools.pulplib import YumRepository, Unit
+from pubtools.pulplib import Unit, YumRepository
 from ubiconfig.config_types.modules import Module
 
 

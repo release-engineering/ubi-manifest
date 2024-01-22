@@ -2,13 +2,15 @@
 Module for depsolving modulemds in ubi repositories
 """
 from __future__ import annotations
+
 import logging
 import os
 from itertools import chain
 from typing import Any
+
 from more_executors import Executors
 from more_executors.futures import f_proxy
-from pubtools.pulplib import YumRepository, ModulemdUnit
+from pubtools.pulplib import ModulemdUnit, YumRepository
 
 from .models import ModularDepsolverItem, UbiUnit
 from .pulp_queries import search_modulemd_defaults, search_modulemds

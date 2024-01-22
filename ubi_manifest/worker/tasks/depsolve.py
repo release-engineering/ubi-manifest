@@ -4,16 +4,16 @@ from collections import defaultdict
 from collections.abc import Iterable
 from concurrent.futures import Future
 from typing import Any
-from ubiconfig import UbiConfig
 
 import redis
 from pubtools.pulplib import (
+    Client,
     ModulemdDefaultsUnit,
     ModulemdUnit,
     RpmUnit,
-    Client,
     YumRepository,
 )
+from ubiconfig import UbiConfig
 
 from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.tasks.depsolver.models import (

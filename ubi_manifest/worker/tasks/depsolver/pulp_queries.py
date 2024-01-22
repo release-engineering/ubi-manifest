@@ -1,15 +1,16 @@
 import os
 from concurrent.futures import Future
 from typing import Optional
+
 from more_executors.futures import f_flat_map, f_map, f_proxy, f_return, f_sequence
 from pubtools.pulplib import (
     Criteria,
     ModulemdDefaultsUnit,
     ModulemdUnit,
-    RpmUnit,
-    YumRepository,
-    Unit,
     Page,
+    RpmUnit,
+    Unit,
+    YumRepository,
 )
 
 from .models import UbiUnit

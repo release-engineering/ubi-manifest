@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import os
 import re
 from collections import defaultdict, deque
@@ -10,7 +11,6 @@ from pubtools.pulplib import Client, Criteria, Matcher, RpmDependency
 from ubiconfig import UbiConfig
 
 from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
-
 
 _LOG = getLogger(__name__)
 

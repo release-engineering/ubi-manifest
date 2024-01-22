@@ -1,14 +1,17 @@
 from __future__ import annotations
+
 import logging
 import os
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from itertools import chain
 from typing import Any
+
 from more_executors import Executors
 from more_executors.futures import f_proxy
-from pubtools.pulplib import Criteria, YumRepository, RpmDependency
+from pubtools.pulplib import Criteria, RpmDependency, YumRepository
 
 from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude
+
 from .models import DepsolverItem, UbiUnit
 from .pulp_queries import search_modulemds, search_rpms
 from .utils import (
@@ -18,7 +21,6 @@ from .utils import (
     is_requirement_resolved,
     parse_bool_deps,
 )
-
 
 _LOG = logging.getLogger(__name__)
 
