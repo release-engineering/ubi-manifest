@@ -1,5 +1,3 @@
-from typing import List
-
 import ubiconfig
 from attrs import define
 from pubtools.pulplib import RpmDependency, YumRepository
@@ -83,7 +81,7 @@ class MockedRedis:
     def get(self, key: str) -> str:
         return self.data.get(key)
 
-    def keys(self) -> List[str]:
+    def keys(self) -> list[str]:
         return list(self.data.keys())
 
 

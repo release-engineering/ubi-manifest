@@ -1,5 +1,4 @@
 import json
-from typing import List
 
 import redis
 from fastapi import APIRouter, HTTPException
@@ -13,13 +12,13 @@ router = APIRouter(prefix="/api/v1")
 
 
 @router.get("/status")
-def status():
+def status() -> dict[str, str]:
     return {"status": "OK"}
 
 
 @router.post(
     "/manifest",
-    response_model=List[TaskState],
+    response_model=list[TaskState],
     status_code=201,
     responses={
         201: {
@@ -47,8 +46,8 @@ def status():
         },
     },
 )
-def manifest_post(depsolve_item: DepsolveItem) -> List[TaskState]:
-    repo_groups = {}
+def manifest_post(depsolve_item: DepsolveItem) -> list[TaskState]:
+    repo_groups: dict[str, list[str]] = {}
     # compare provided repo_ids with the config and pick allowed repo groups
     for repo_id in depsolve_item.repo_ids:
         for key, group in app.conf.allowed_ubi_repo_groups.items():
@@ -113,8 +112,8 @@ def manifest_get(repo_id: str) -> DepsolverResult:
     value = redis_client.get(repo_id) or ""
     if value:
         content = []
-        for value in json.loads(value):
-            item = DepsolverResultItem(**value)
+        for parsed_value in json.loads(value):
+            item = DepsolverResultItem(**parsed_value)
             content.append(item)
         result = DepsolverResult(repo_id=repo_id, content=content)
         return result

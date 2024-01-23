@@ -1,12 +1,16 @@
+from __future__ import annotations
+
 import logging
 import os
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from itertools import chain
-from typing import List, Set
+from typing import Any
 
 from more_executors import Executors
 from more_executors.futures import f_proxy
-from pubtools.pulplib import Criteria, YumRepository
+from pubtools.pulplib import Criteria, RpmDependency, YumRepository
+
+from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude
 
 from .models import DepsolverItem, UbiUnit
 from .pulp_queries import search_modulemds, search_rpms
@@ -32,47 +36,49 @@ MAX_WORKERS = int(os.getenv("UBI_MANIFEST_DEPSOLVER_WORKERS", "8"))
 class Depsolver:
     def __init__(
         self,
-        repos: List[DepsolverItem],
-        srpm_repos,
-        modulemd_dependencies: Set[str],
-        modular_rpm_filenames,
-        **kwargs,
+        repos: list[DepsolverItem],
+        srpm_repos: list[Future[YumRepository]],
+        modulemd_dependencies: set[str],
+        modular_rpm_filenames: set[str],
+        **kwargs: Any,
     ) -> None:
-        self.repos: List[DepsolverItem] = repos
-        self.modulemd_dependencies: Set[str] = modulemd_dependencies
-        self.output_set: Set[UbiUnit] = set()
-        self.srpm_output_set: Set[UbiUnit] = set()
+        self.repos: list[DepsolverItem] = repos
+        self.modulemd_dependencies: set[str] = modulemd_dependencies
+        self.output_set: set[UbiUnit] = set()
+        self.srpm_output_set: set[UbiUnit] = set()
 
-        self._srpm_repos: List[Future[YumRepository]] = srpm_repos
+        self._srpm_repos: list[Future[YumRepository]] = srpm_repos
 
-        self._provides: Set = set()  # set of all rpm.provides we've visited
-        self._requires: Set = set()  # set of all rpm.requires we've visited
+        self._provides: set[RpmDependency] = set()  # set of rpm.provides we've visited
+        self._requires: set[RpmDependency] = set()  # set of rpm.requires we've visited
 
         # set of solvables (pkg, lib, ...) that we use for checking remaining requires
-        self._unsolved: Set = set()
+        self._unsolved: set[RpmDependency] = set()
 
-        # Set of all modular rpms. Modifying the given modular_rpm_filenames set in place.
-        self._modular_rpm_filenames: Set = modular_rpm_filenames
+        # Set of all modular rpms. Modifying the given modular_rpm_filenames set in place
+        self._modular_rpm_filenames: set[str] = modular_rpm_filenames
 
-        self._executor: ThreadPoolExecutor = Executors.thread_pool(
+        self._executor: ThreadPoolExecutor = Executors.thread_pool(  # type: ignore [assignment]
             max_workers=MAX_WORKERS
         )
         self._base_pkgs_only = kwargs.get("base_pkgs_only") or False
 
-    def __enter__(self):
+    def __enter__(self) -> Depsolver:
         return self
 
-    def __exit__(self, *args, **kwargs):
+    def __exit__(self, *args: Any, **kwargs: Any) -> None:
         self._executor.__exit__(*args, **kwargs)
 
-    def _get_pkgs_from_all_modules(self, repos):
+    def _get_pkgs_from_all_modules(
+        self, repos: list[YumRepository]
+    ) -> Future[set[str]]:
         """
         Search for modulemds in all input repos and extract rpm filenames.
         """
 
-        def extract_modular_filenames():
+        def extract_modular_filenames() -> set[str]:
             filenames = set()
-            for module in modules:
+            for module in modules:  # type: ignore [attr-defined]
                 filenames |= set(module.artifacts_filenames)
 
             return filenames
@@ -80,19 +86,27 @@ class Depsolver:
         modules = search_modulemds([Criteria.true()], repos)
         return f_proxy(self._executor.submit(extract_modular_filenames))
 
-    def get_base_packages(self, repos, pkgs_list, blacklist):
+    def get_base_packages(
+        self,
+        repos: list[YumRepository],
+        pkgs_list: set[str],
+        blacklist: list[PackageToExclude],
+    ) -> list[UbiUnit]:
         crit = create_or_criteria(["name"], [(rpm,) for rpm in pkgs_list])
 
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
+
         newest_rpms = get_n_latest_from_content(
-            content, blacklist, self._modular_rpm_filenames
+            content, blacklist, self._modular_rpm_filenames  # type: ignore [arg-type]
         )
 
         return newest_rpms
 
-    def get_modulemd_packages(self, repos, pkgs_list):
+    def get_modulemd_packages(
+        self, repos: list[YumRepository], pkgs_list: set[str]
+    ) -> Future[Future[set[UbiUnit]]]:
         """
         Search for modular rpms.
         """
@@ -103,7 +117,7 @@ class Depsolver:
         )
         return content
 
-    def extract_and_resolve(self, content):
+    def extract_and_resolve(self, content: set[UbiUnit]) -> None:
         """
         Extracts provides and requires from content and sets internal
         state of self accordingly.
@@ -138,7 +152,12 @@ class Depsolver:
                     solved.add(req)
             self._unsolved -= solved
 
-    def what_provides(self, list_of_requires, repos, blacklist):
+    def what_provides(
+        self,
+        list_of_requires: list[RpmDependency],
+        repos: list[YumRepository],
+        blacklist: list[PackageToExclude],
+    ) -> list[UbiUnit]:
         """
         Get the latest rpms that provides requirements from list_of_requires in given repos
         """
@@ -153,12 +172,14 @@ class Depsolver:
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
         newest_rpms = get_n_latest_from_content(
-            content, blacklist, self._modular_rpm_filenames
+            content, blacklist, self._modular_rpm_filenames  # type: ignore [arg-type]
         )
 
         return newest_rpms
 
-    def get_source_pkgs(self, binary_rpms, blacklist):
+    def get_source_pkgs(
+        self, binary_rpms: list[UbiUnit], blacklist: list[PackageToExclude]
+    ) -> set[UbiUnit]:
         crit = create_or_criteria(
             ["filename"], [(rpm.sourcerpm,) for rpm in binary_rpms if rpm.sourcerpm]
         )
@@ -169,9 +190,9 @@ class Depsolver:
             )
         )
 
-        return {rpm for rpm in content if not _is_blacklisted(rpm, blacklist)}
+        return {rpm for rpm in content if not _is_blacklisted(rpm, blacklist)}  # type: ignore [attr-defined]
 
-    def run(self):
+    def run(self) -> None:
         """
         Method runs whole depsolving machinery:
         1. Get base packages from each repo input - based on repo whitelist
@@ -189,7 +210,7 @@ class Depsolver:
         # Get modular rpms if they are not already populated from the previous run of the depsolver
         if not self._modular_rpm_filenames:
             self._modular_rpm_filenames.update(
-                self._get_pkgs_from_all_modules(pulp_repos)
+                self._get_pkgs_from_all_modules(pulp_repos)  # type: ignore [arg-type]
             )
 
         merged_blacklist = list(
@@ -211,7 +232,7 @@ class Depsolver:
         if self.modulemd_dependencies:
             content_fts.append(
                 self._executor.submit(
-                    self.get_modulemd_packages,
+                    self.get_modulemd_packages,  # type: ignore [arg-type]
                     pulp_repos,
                     self.modulemd_dependencies,
                 )
@@ -264,7 +285,7 @@ class Depsolver:
             if deps_not_found:
                 self._log_warnings(deps_not_found, pulp_repos, merged_blacklist)
 
-    def _batch_size(self):
+    def _batch_size(self) -> int:
         if len(self._unsolved) < BATCH_SIZE_RESOLVER:
             batch_size = len(self._unsolved)
         else:
@@ -272,10 +293,10 @@ class Depsolver:
 
         return batch_size
 
-    def export(self):
-        out = {}
+    def export(self) -> dict[str, list[UbiUnit]]:
+        out: dict[str, list[UbiUnit]] = {}
         # set of unique tuples (filename, repo_id)
-        filename_repo_tuples = set()
+        filename_repo_tuples: set[tuple[str, str]] = set()
         for item in self.output_set | self.srpm_output_set:
             # deduplicate output sets, but keep identical rpms that have different repository
             # we can't easily decide which one we should keep/discard.
@@ -290,7 +311,12 @@ class Depsolver:
 
         return out
 
-    def _log_warnings(self, deps_not_found, pulp_repos, merged_blacklist):
+    def _log_warnings(
+        self,
+        deps_not_found: set[str],
+        pulp_repos: list[YumRepository],
+        merged_blacklist: list[PackageToExclude],
+    ) -> None:
         """
         Log failed depsolving. We print out the rpms whose direct dependencies
         could not be included in output set.
@@ -298,12 +324,12 @@ class Depsolver:
         input_repos = [x.id for x in pulp_repos]
 
         # To determine if dep is missing due to being blacklisted
-        def _is_blacklisted_by_rule(item, rule):
+        def _is_blacklisted_by_rule(item: str, rule: PackageToExclude) -> bool:
             if rule.globbing:
                 return item.startswith(rule.name)
             return item == rule.name
 
-        def _requires_names(requires):
+        def _requires_names(requires: list[RpmDependency]) -> set[str]:
             out = set()
             for item in requires:
                 if item.name.startswith("("):
@@ -335,7 +361,7 @@ class Depsolver:
                     sorted(depending_rpms),
                 )
 
-    def _log_missing_base_pkgs(self):
+    def _log_missing_base_pkgs(self) -> None:
         found_pkg_names = {item.name for item in self.output_set}
 
         for item in self.repos:
