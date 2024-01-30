@@ -1,6 +1,7 @@
 """
 Module for depsolving modulemds in ubi repositories
 """
+
 from __future__ import annotations
 
 import logging
