@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi8/python-39
+FROM registry.access.redhat.com/ubi9/python-311
 
 LABEL maintainer="Red Hat - EXD"
 
@@ -8,11 +8,8 @@ WORKDIR /src
 USER 0
 
 # Enable CentOS repos, as rpm-devel is not in RHEL repos
-COPY ./docker/rpm-config/CentOS-Stream-rhsrvany.repo /etc/yum.repos.d/
-COPY ./docker/rpm-config/RPM-GPG-KEY-centosofficial /etc/pki/rpm-gpg/
-
-RUN yum repolist
-RUN yum install -y --disableplugin=subscription-manager rpm-devel
+RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+RUN dnf install -y python3.11-rpm
 
 # copy config
 COPY ./conf/app.conf /etc/ubi_manifest/app.conf
@@ -30,9 +27,11 @@ ENV POETRY_VERSION="1.7.0"\
 COPY . .
 
 # install poetry
-RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN pip3.11 install poetry
 
 RUN poetry install
+RUN python3 -c "import site; site.addsitedir('/usr/lib64/python3.11')"
+
 
 # Switch back to unpriviledged user to run the application
 USER 1001
