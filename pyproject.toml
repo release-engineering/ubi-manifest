@@ -26,7 +26,6 @@ pubtools-pulplib = "*"
 attrs = "*"
 more-executors = "*"
 ubi-config = "*"
-rpmdyn = "*"
 
 
 [tool.poetry.group.test]
@@ -36,6 +35,7 @@ optional = true
 pytest = "*"
 httpx = "*"
 testfixtures = "*"
+rpmdyn = "*"
 
 [tool.poetry.group.dev]
 optional = true
