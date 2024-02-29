@@ -8,8 +8,8 @@ class UbiConfigLoader:
     Class capable of loading UbiConfig from git repository at given url.
     """
 
-    def __init__(self, url: str) -> None:
-        self._url: str = url
+    def __init__(self, url_or_dir: str) -> None:
+        self._url_or_dir: str = url_or_dir  # url or path to directory
         self._config_map: dict[tuple[str, str, str], ubiconfig.UbiConfig] = {}
         self._all_config: Optional[list[ubiconfig.UbiConfig]] = None
 
@@ -21,7 +21,7 @@ class UbiConfigLoader:
         return self._all_config
 
     def _load_all(self) -> Any:
-        loader = ubiconfig.get_loader(self._url)
+        loader = ubiconfig.get_loader(self._url_or_dir)
         return loader.load_all()
 
     def get_config(

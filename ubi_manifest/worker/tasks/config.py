@@ -16,7 +16,7 @@ class Config:
     pulp_cert: str = "path/to/cert"
     pulp_key: str = "path/to/key"
     pulp_verify: Union[bool, str] = True
-    content_config: dict[str, str] = {"group_prefix": "url_to_config_repository"}
+    content_config: dict[str, str] = {"group_prefix": "url_or_dir"}
     allowed_ubi_repo_groups: dict[str, list[str]] = {
         "group_prefix1": ["repo_1", "repo_2"]
     }

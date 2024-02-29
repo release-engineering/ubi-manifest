@@ -155,7 +155,7 @@ def test_manifest_post(client):
         # 'repo_not_allowed' is skipped completely
         # the content config url is also determined from default conf and passed as arg
         mocked_apply_async.assert_called_once_with(
-            args=[["repo_1", "repo_2"], "url_to_config_repository"]
+            args=[["repo_1", "repo_2"], "url_or_dir"]
         )
 
         # expected status code is 200
