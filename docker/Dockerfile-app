@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/python-311
+FROM registry.access.redhat.com/ubi9/python-311:1-41
 
 LABEL maintainer="Red Hat - EXD"
 
@@ -8,7 +8,7 @@ WORKDIR /src
 USER 0
 
 RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
-RUN dnf install -y python3.11-rpm
+RUN dnf install -y python3.11-rpm-4.16.1.3-25.1.el9
 
 # copy config
 COPY ./conf/app.conf /etc/ubi_manifest/app.conf
