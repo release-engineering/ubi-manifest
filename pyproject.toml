@@ -9,7 +9,7 @@ repository="https://github.com/release-engineering/ubi_manifest"
 documentation="http://TODO"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11"
+    "Programming Language :: Python :: 3.9"
 ]
 
 
@@ -19,7 +19,7 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.dependencies]
-python = ">=3.11"
+python = ">=3.9"
 celery = {version = "*", extras = ["redis"]}
 fastapi = "*"
 pubtools-pulplib = "*"
