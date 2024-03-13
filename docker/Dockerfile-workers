@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/python-311:1-41
+FROM registry.access.redhat.com/ubi9/python-39:latest
 
 LABEL maintainer="Red Hat - EXD"
 
@@ -6,10 +6,6 @@ WORKDIR /src
 
 # Switch to priviledged user to install dependencies and application
 USER 0
-
-# Enable CentOS repos, as rpm-devel is not in RHEL repos
-RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
-RUN dnf install -y python3.11-rpm-4.16.1.3-25.1.el9
 
 # copy config
 COPY ./conf/app.conf /etc/ubi_manifest/app.conf
@@ -22,18 +18,19 @@ ENV POETRY_VERSION="1.7.0"\
     # Let poetry use the virtualenv that comes with the base image
     POETRY_VIRTUALENVS_CREATE=false\
     # Path to the virtualenv from base image
-    VIRTUAL_ENV=${APP_ROOT}
+    VIRTUAL_ENV=${APP_ROOT}\
+    # Add os-level module to PYTHONPATH so we can use rpm module
+    PYTHONPATH="${PYTHONPATH}:/usr/lib64/python3.9/site-packages"
 
 COPY . .
 
 # install poetry
-RUN pip3.11 install poetry
+RUN pip install poetry
 
 RUN poetry install
-RUN python3 -c "import site; site.addsitedir('/usr/lib64/python3.11')"
-
 
 # Switch back to unpriviledged user to run the application
 USER 1001
+
 
 CMD celery -A ubi_manifest.worker.tasks worker --loglevel=debug
