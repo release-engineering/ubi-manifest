@@ -1,0 +1,36 @@
+FROM registry.access.redhat.com/ubi9/python-39:latest
+
+LABEL maintainer="Red Hat - EXD"
+
+WORKDIR /src
+
+# Switch to priviledged user to install dependencies and application
+USER 0
+
+# copy config
+COPY ./conf/app.conf /etc/ubi_manifest/app.conf
+
+# add certs for trusted connection dependent services if required
+COPY ./conf/certs/* /etc/pki/ca-trust/source/anchors/
+RUN update-ca-trust extract
+
+ENV POETRY_VERSION="1.7.0"\
+    # Let poetry use the virtualenv that comes with the base image
+    POETRY_VIRTUALENVS_CREATE=false\
+    # Path to the virtualenv from base image
+    VIRTUAL_ENV=${APP_ROOT}\
+    # Add os-level module to PYTHONPATH so we can use rpm module
+    PYTHONPATH="${PYTHONPATH}:/usr/lib64/python3.9/site-packages"
+
+COPY . .
+
+# install poetry
+RUN pip install poetry
+
+RUN poetry install
+
+# Switch back to unpriviledged user to run the application
+USER 1001
+
+
+CMD celery -A ubi_manifest.worker.tasks beat --loglevel=debug -s ${APP_ROOT}/celerybeat-schedule

@@ -20,12 +20,25 @@ class Config:
     allowed_ubi_repo_groups: dict[str, list[str]] = {
         "group_prefix1": ["repo_1", "repo_2"]
     }
-    imports: list[str] = ["ubi_manifest.worker.tasks.depsolve"]
+    imports: list[str] = [
+        "ubi_manifest.worker.tasks.depsolve",
+        "ubi_manifest.worker.tasks.repo_monitor",
+    ]
     broker_url: str = "redis://redis:6379/0"
     result_backend: str = "redis://redis:6379/0"
     ubi_manifest_data_expiration: int = (
         60 * 60 * 4
     )  # 4 hours default data expiration for redis
+    publish_limit: int = 6  # in hours
+    beat_schedule: dict[str, dict[str, Any]] = {
+        "monitor-repo-every-N-hours": {
+            "task": "ubi_manifest.worker.tasks.repo_monitor.repo_monitor_task",
+            "schedule": int(
+                os.getenv("UBI_MANIFEST_REPO_MONITOR_SCHEDULE", str(60 * 60))
+            ),  # in seconds
+        }
+    }
+    timezone = "UTC"
 
 
 def make_config(celery_app: celery.Celery) -> None:
