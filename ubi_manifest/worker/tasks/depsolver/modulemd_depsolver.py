@@ -157,8 +157,8 @@ class ModularDepsolver:
                 # skip source rpms
                 if ".src.rpm" in pkg:
                     continue
-                else:
-                    self.rpm_dependencies.add(pkg)
+
+                self.rpm_dependencies.add(pkg)
 
     def export(self) -> dict[str, Any]:
         """Returns a dictionary of depsolved modules and their rpm dependencies."""

@@ -86,8 +86,9 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
             cs_repo_map, cs_debug_repo_map = _get_population_sources_per_cs(
                 client, repo
             )
-            # if we have population sources with different content sets and different content configs
-            # we need to make sure that we use correct config for each input repo
+            # if we have population sources with different content sets
+            # and different content configs, we need to make sure that
+            # we use correct config for each input repo
             for input_cs, input_repos in cs_repo_map.items():
                 config = _get_content_config(
                     ubi_config_loader,
@@ -122,7 +123,7 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
         # run modulemd depsolver
         _LOG.info(
             "Running MODULEMD depsolver for repos: %s",
-            [item[0] for item in mod_dep_map.keys()],
+            [item[0] for item in mod_dep_map],
         )
         modulemd_out = _run_modulemd_depsolver(list(mod_dep_map.values()), repos_map)
         out = modulemd_out["modules_out"]
@@ -137,9 +138,7 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
         modular_rpm_filenames: set[str] = set()
 
         # run depsolver for binary repos
-        _LOG.info(
-            "Running depsolver for RPM repos: %s", [item[0] for item in dep_map.keys()]
-        )
+        _LOG.info("Running depsolver for RPM repos: %s", [item[0] for item in dep_map])
         # TODO this blocks task from processing, depsolving of debuginfo packages
         # could be moved to the Depsolver. It should lead to more async processing
         # and better performance
@@ -159,7 +158,7 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
         # run depsolver for debuginfo repo
         _LOG.info(
             "Running depsolver for DEBUGINFO repos: %s",
-            [item[0] for item in debug_dep_map.keys()],
+            [item[0] for item in debug_dep_map],
         )
         debuginfo_out = _run_depsolver(
             list(debug_dep_map.values()),

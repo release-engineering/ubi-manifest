@@ -2,4 +2,5 @@
 disable=fixme,
         too-few-public-methods,
         invalid-name,
+        missing-module-docstring,
         

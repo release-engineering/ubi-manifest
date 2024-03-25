@@ -27,7 +27,10 @@ class UbiConfigLoader:
     def get_config(
         self, input_cs: str, output_cs: str, version: str
     ) -> ubiconfig.UbiConfig:
-        """Gets and returns UbiConfig for given input content set, output content set and a version"""
+        """
+        Gets and returns UbiConfig for given input content set,
+        output content set and a version
+        """
         out = self._config_map.get((input_cs, output_cs, version)) or None
 
         if out is None:
