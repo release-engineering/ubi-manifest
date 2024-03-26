@@ -92,7 +92,7 @@ class Depsolver:
         pkgs_list: set[str],
         blacklist: list[PackageToExclude],
     ) -> list[UbiUnit]:
-        crit = create_or_criteria(["name"], [(rpm,) for rpm in pkgs_list])
+        crit = create_or_criteria(["name"], [(name,) for name in pkgs_list])
 
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
@@ -110,7 +110,7 @@ class Depsolver:
         """
         Search for modular rpms.
         """
-        crit = create_or_criteria(["filename"], [(rpm,) for rpm in pkgs_list])
+        crit = create_or_criteria(["filename"], [(name,) for name in pkgs_list])
 
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM_SPECIFIC)
@@ -123,12 +123,16 @@ class Depsolver:
         state of self accordingly.
         """
         _requires = set()
+        _file_reqs = set()
+        _has_files = set()
         for rpm in content:
+            if rpm.files:
+                # collect to potentially save iterations later
+                _has_files.add(rpm)
             for item in rpm.requires:
-                # skip scriplet requires
                 if item.name.startswith("/"):
-                    continue
-                if item.name.startswith("("):
+                    _file_reqs.add(item)
+                elif item.name.startswith("("):
                     # add parsed bool deps to requires that need solving
                     _requires |= parse_bool_deps(item.name)
                 else:
@@ -137,6 +141,12 @@ class Depsolver:
             for item in rpm.provides:
                 # add to global provides
                 self._provides.add(item)
+
+        # add rpm dependencies for file requirements
+        for item in _file_reqs:
+            for rpm in _has_files:
+                if item.name in rpm.files:
+                    _requires.add(RpmDependency(name=rpm.name))
 
         # update global requires
         self._requires |= _requires

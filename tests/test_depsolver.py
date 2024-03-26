@@ -241,8 +241,8 @@ def test_run(pulp):
             # provides set holds all capabilities that we went through during depsolving
             assert depsolver._provides == rpmdeps_from_names(
                 "gcc",
-                "jq",
-                "apr",
+                "jq",  # requires file /some/script
+                "apr",  # contains file /some/script
                 "babel",
                 "lib.a",
                 "lib.b",
@@ -256,6 +256,7 @@ def test_run(pulp):
             # requires set holds all requires that we went through during depsolving
             assert depsolver._requires == rpmdeps_from_names(
                 "blacklisted-package",
+                "apr",  # now required because it holds a required file (/some/script)
                 "lib.a",
                 "lib.b",
                 "lib.c",
@@ -358,10 +359,11 @@ def _prepare_test_data(pulp):
         requires=[
             RpmDependency(name="lib.a"),
             RpmDependency(name="lib.d"),
-            RpmDependency(name="/some/script"),
+            RpmDependency(
+                name="/some/script"
+            ),  # file req should be converted to rpm "apr"
         ],
     )
-    # note: the dependency "/some/script" will be skipped from processing
 
     unit_3 = RpmUnit(
         name="apr",
@@ -371,6 +373,7 @@ def _prepare_test_data(pulp):
         arch="x86_64",
         provides=[RpmDependency(name="apr")],
         requires=[RpmDependency(name="lib.a"), RpmDependency(name="lib.d")],
+        files=["/some/script", "/another/script"],
     )
 
     unit_4 = RpmUnit(
