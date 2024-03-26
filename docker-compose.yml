@@ -16,6 +16,16 @@ services:
     depends_on:
       - redis
 
+  beat:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile-beat
+    environment:
+      - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-bundle.crt
+    depends_on:
+      - redis
+      - worker
+
   app:
     build:
       context: .
