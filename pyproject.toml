@@ -36,6 +36,7 @@ pytest = "*"
 httpx = "*"
 testfixtures = "*"
 rpmdyn = "*"
+bandit = "*"
 
 [tool.poetry.group.dev]
 optional = true
