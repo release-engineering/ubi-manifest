@@ -85,3 +85,10 @@ jobs:
         uses: snok/install-poetry@v1
       - name: Run Tox
         run: tox -e bandit-exitzero
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout Repository'
+        uses: actions/checkout@v4
+      - name: 'Dependency Review'
+        uses: actions/dependency-review-action@v4
