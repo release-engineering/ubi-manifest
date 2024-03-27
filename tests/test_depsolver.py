@@ -370,7 +370,7 @@ def _prepare_test_data(pulp):
         arch="x86_64",
         provides=[RpmDependency(name="apr")],
         requires=[RpmDependency(name="lib.a"), RpmDependency(name="lib.d")],
-        files=["/some/script"]
+        files=["/some/script"],
     )
 
     unit_4 = RpmUnit(
