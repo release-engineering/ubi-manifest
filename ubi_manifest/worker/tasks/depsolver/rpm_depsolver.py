@@ -125,9 +125,6 @@ class Depsolver:
         _requires = set()
         for rpm in content:
             for item in rpm.requires:
-                # skip scriplet requires
-                if item.name.startswith("/"):
-                    continue
                 if item.name.startswith("("):
                     # add parsed bool deps to requires that need solving
                     _requires |= parse_bool_deps(item.name)
@@ -138,6 +135,13 @@ class Depsolver:
                 # add to global provides
                 self._provides.add(item)
 
+        # replace file dependencies with rpm dependencies, if an rpm provides the file
+        for item in [req for req in _requires if req.name.startswith("/")]:
+            for rpm in content:
+                if item.name in rpm.files:
+                    _requires.add(RpmDependency(name=rpm.name))
+                    _requires.remove(item)
+
         # update global requires
         self._requires |= _requires
         # add new requires to unsolved
@@ -146,8 +150,6 @@ class Depsolver:
         for prov in self._provides:
             solved = set()
             for req in self._unsolved:
-                if prov.name != req.name:
-                    continue
                 if is_requirement_resolved(req, prov):
                     solved.add(req)
             self._unsolved -= solved

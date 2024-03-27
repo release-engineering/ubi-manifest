@@ -241,8 +241,8 @@ def test_run(pulp):
             # provides set holds all capabilities that we went through during depsolving
             assert depsolver._provides == rpmdeps_from_names(
                 "gcc",
-                "jq",
-                "apr",
+                "jq",  # requires /some/script
+                "apr",  # contains file /some/script
                 "babel",
                 "lib.a",
                 "lib.b",
@@ -361,7 +361,6 @@ def _prepare_test_data(pulp):
             RpmDependency(name="/some/script"),
         ],
     )
-    # note: the dependency "/some/script" will be skipped from processing
 
     unit_3 = RpmUnit(
         name="apr",
@@ -371,6 +370,7 @@ def _prepare_test_data(pulp):
         arch="x86_64",
         provides=[RpmDependency(name="apr")],
         requires=[RpmDependency(name="lib.a"), RpmDependency(name="lib.d")],
+        files=["/some/script"],
     )
 
     unit_4 = RpmUnit(

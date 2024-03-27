@@ -179,17 +179,16 @@ def vercmp_sort() -> Any:
 
 
 def is_requirement_resolved(requirement: RpmDependency, provider: RpmDependency) -> Any:
+    if requirement.name != provider.name:
+        return False
     if requirement.flags:
         req_evr = (requirement.epoch, requirement.version, requirement.release)
         prov_evr = (provider.epoch, provider.version, provider.release)
         # compare provider with requirement
-        out = RELATION_CMP_MAP[requirement.flags](prov_evr, req_evr)  # type: ignore [no-untyped-call]
+        return RELATION_CMP_MAP[requirement.flags](prov_evr, req_evr)  # type: ignore [no-untyped-call]
 
-    else:
-        # without flags we just compare names
-        out = requirement.name == provider.name
-
-    return out
+    # without flags we just compare names
+    return requirement.name == provider.name
 
 
 def _keep_n_latest_rpms(rpms: list[UbiUnit], n: int = 1) -> None:
