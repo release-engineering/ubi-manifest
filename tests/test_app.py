@@ -3,7 +3,7 @@ from unittest import mock
 
 from attr import define
 
-from .utils import MockedRedis
+from .utils import MockedRedis, create_and_insert_repo, create_mock_configs
 
 
 @define
@@ -132,58 +132,224 @@ def test_manifest_get_not_found(client):
         assert json_data["detail"] == "Content for ubi_repo_id not found"
 
 
-def test_manifest_post(client):
-    """test request for depsolving for given repo ids"""
-    with mock.patch("celery.app.task.Task.apply_async") as mocked_apply_async:
-        mocked_apply_async.return_value = MockAsyncResult(
-            task_id="foo-bar-id", state="PENDING"
-        )
+@mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
+@mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@mock.patch("celery.app.task.Task.apply_async")
+def test_manifest_post_full_dep(
+    mocked_apply_async, pulp_client, get_loader, client, pulp
+):
+    """test request for depsolving for given repo ids where we use full depsolving"""
+    mocked_apply_async.side_effect = [
+        MockAsyncResult(task_id="foo-bar-id-1", state="PENDING"),
+        MockAsyncResult(task_id="foo-bar-id-2", state="PENDING"),
+    ]
+    configs = create_mock_configs(3)
+    get_loader.return_value = mock.Mock(load_all=mock.Mock(return_value=configs))
+    create_and_insert_repo(
+        id="ubi_repo_1",
+        content_set="content_set_0",
+        ubi_population=True,
+        arch="arch1",
+        pulp=pulp,
+    )
+    create_and_insert_repo(
+        id="ubi_repo_2",
+        content_set="content_set_1",
+        ubi_population=True,
+        arch="arch1",
+        pulp=pulp,
+    )
+    create_and_insert_repo(
+        id="ubi_repo_3",
+        content_set="content_set_2",
+        ubi_population=True,
+        arch="arch2",
+        pulp=pulp,
+    )
+    pulp_client.return_value = pulp.client
 
-        # will request depsolving for 2 repos
-        # 'repo_1' is set in the default config, and it will be depsolving
-        # 'repo_not_allowed' will be skipped - not present in the config
-        response = client.post(
-            "/api/v1/manifest", json={"repo_ids": ["repo_1", "repo_not_allowed"]}
-        )
-
-        # depsolve task is run with 2 repos in args:
-        # 'repo_1' was requested via API
-        # 'repo_2' is taken from repo_group that is defined in the config
-        # it's required to run depsolving for whole repo_group, otherwise we
-        # won't be able to find some deps that are not in the 'repo_1' but are
-        # present in 'repo_2'
-        # 'repo_not_allowed' is skipped completely
-        # the content config url is also determined from default conf and passed as arg
-        mocked_apply_async.assert_called_once_with(
-            args=[["repo_1", "repo_2"], "url_or_dir"]
-        )
-
-        # expected status code is 200
-        assert response.status_code == 201
-        json_data = response.json()
-        # one task is expected to be spawned therefore there is only one item
-        # in the response with proper task_id and state set
-        assert len(json_data) == 1
-        item = json_data[0]
-        assert item["task_id"] == "foo-bar-id"
-        assert item["state"] == "PENDING"
+    requested_repos = ["ubi_repo_1", "ubi_repo_2", "ubi_repo_3", "ubi_repo_not_allowed"]
+    response = client.post("/api/v1/manifest", json={"repo_ids": requested_repos})
+    # This will request two depsolve task:
+    # First task for 'ubi_repo_1' and 'ubi_repo_2' because they are in one repo group determined by
+    # get_items_for_depsolving() (repos are grouped by version-arch combinations).
+    # Second task for 'ubi_repo_3' because this repo is in another repo group.
+    # 'ubi_repo_not_allowed' will be skipped - not present in any repo_group.
+    # It's required to run depsolving for the whole repo_group, otherwise we
+    # won't be able to find some deps that are not in the 'ubi_repo_1' but are
+    # present in 'ubi_repo_2'.
+    mocked_apply_async.assert_has_calls(
+        [
+            mock.call(args=[["ubi_repo_1", "ubi_repo_2"], "url_or_dir_1"]),
+            mock.call(args=[["ubi_repo_3"], "url_or_dir_1"]),
+        ]
+    )
+    # expected status code is 201
+    assert response.status_code == 201
+    json_data = response.json()
+    # two tasks are expected to be spawned
+    assert len(json_data) == 2
+    assert json_data[0]["task_id"] == "foo-bar-id-1"
+    assert json_data[0]["state"] == "PENDING"
+    assert json_data[1]["task_id"] == "foo-bar-id-2"
+    assert json_data[1]["state"] == "PENDING"
 
 
-def test_manifest_post_not_allowed(client):
-    """test request for depsolving for given repo ids, but none of the is allowed by config"""
-    with mock.patch("celery.app.task.Task.apply_async") as mocked_apply_async:
-        # none of repos in request are allowed for depsolving by config
-        response = client.post(
-            "/api/v1/manifest",
-            json={"repo_ids": ["repo_not_allowed_1", "repo_not_allowed_2"]},
-        )
-        # we never call apply_async on depsolve_task
-        mocked_apply_async.assert_not_called()
-        # expected status code is 404
-        assert response.status_code == 404
-        # there is enough detail info in the response
-        json_data = response.json()
-        assert (
-            json_data["detail"]
-            == "None of ['repo_not_allowed_1', 'repo_not_allowed_2'] are allowed for depsolving."
-        )
+@mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
+@mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@mock.patch("celery.app.task.Task.apply_async")
+def test_manifest_post_not_full_dep(
+    mocked_apply_async, pulp_client, get_loader, client, pulp
+):
+    """test request for depsolving for given repo ids where we do not use full depsolving"""
+    mocked_apply_async.side_effect = [
+        MockAsyncResult(task_id="foo-bar-id-1", state="PENDING"),
+        MockAsyncResult(task_id="foo-bar-id-2", state="PENDING"),
+    ]
+    configs = create_mock_configs(
+        2, flags=[{"base_pkgs_only": True}, {"base_pkgs_only": True}]
+    )
+    get_loader.return_value = mock.Mock(load_all=mock.Mock(return_value=configs))
+    create_and_insert_repo(
+        id="client-tools_repo_1",
+        content_set="content_set_0",
+        ubi_population=True,
+        arch="arch1",
+        pulp=pulp,
+    )
+    create_and_insert_repo(
+        id="client-tools_repo_2",
+        content_set="content_set_1",
+        ubi_population=True,
+        arch="arch1",
+        pulp=pulp,
+    )
+    pulp_client.return_value = pulp.client
+
+    response = client.post(
+        "/api/v1/manifest",
+        json={"repo_ids": ["client-tools_repo_1", "client-tools_repo_2"]},
+    )
+    # This will request two depsolve tasks - one for each given repo.
+    # For these repos we do not use full depsolving, so no groups needs to be
+    # determined and the depsolving is performed separately for each repo.
+    mocked_apply_async.assert_has_calls(
+        [
+            mock.call(args=[["client-tools_repo_1"], "url_or_dir_2"]),
+            mock.call(args=[["client-tools_repo_2"], "url_or_dir_2"]),
+        ]
+    )
+    # expected status code is 201
+    assert response.status_code == 201
+    json_data = response.json()
+    # two tasks are expected to be spawned
+    assert len(json_data) == 2
+    assert json_data[0]["task_id"] == "foo-bar-id-1"
+    assert json_data[0]["state"] == "PENDING"
+    assert json_data[1]["task_id"] == "foo-bar-id-2"
+    assert json_data[1]["state"] == "PENDING"
+
+
+@mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
+@mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@mock.patch("celery.app.task.Task.apply_async")
+def test_manifest_post_no_depsolve_items(
+    mocked_apply_async, pulp_client, get_loader, client, pulp
+):
+    """test request for depsolving for given repo ids, but no depsolve items are identified"""
+    get_loader.return_value = mock.Mock(
+        load_all=mock.Mock(return_value=create_mock_configs(3))
+    )
+    create_and_insert_repo(
+        id="ubi_repo_1",
+        content_set="content_set_0",
+        ubi_population=True,
+        arch="arch1",
+        pulp=pulp,
+    )
+    pulp_client.return_value = pulp.client
+
+    response = client.post(
+        "/api/v1/manifest", json={"repo_ids": ["ubi_repo_not_allowed"]}
+    )
+    # No depsolve tasks are identified because 'ubi_repo_not_allowed' is not
+    # found in Pulp (therefore not present in any repo group), so
+    # we never call apply_async.
+    mocked_apply_async.assert_not_called()
+    # expected status code is 404
+    assert response.status_code == 404
+    # there is enough detail info in the response
+    json_data = response.json()
+    assert (
+        json_data["detail"]
+        == "No depsolve items were identified for ['ubi_repo_not_allowed']."
+    )
+
+
+@mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
+@mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@mock.patch("celery.app.task.Task.apply_async")
+def test_manifest_post_more_repo_classes(
+    mocked_apply_async, pulp_client, get_loader, client
+):
+    """test request for depsolving for given repo ids, which are from different repo classes"""
+    response = client.post(
+        "/api/v1/manifest",
+        json={"repo_ids": ["ubi_repo", "client-tools_repo"]},
+    )
+    # The request has finished before any calls on pulp client or ubiconfig were made because
+    # repos from two different classes were in the request.
+    mocked_apply_async.assert_not_called()
+    pulp_client.assert_not_called()
+    get_loader.assert_not_called()
+    # expected status code is 400
+    assert response.status_code == 400
+    # there is enough detail info in the response
+    json_data = response.json()
+    assert (
+        json_data["detail"]
+        == "Can't process repos from different classes ['ubi', 'client-tools'] in one request. "
+        "Please make separate request for each class."
+    )
+
+
+@mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
+@mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@mock.patch("celery.app.task.Task.apply_async")
+def test_manifest_post_wrong_repo_ids(
+    mocked_apply_async, pulp_client, get_loader, client
+):
+    """test request for depsolving for given repo ids, which are unexpected."""
+    response = client.post("/api/v1/manifest", json={"repo_ids": ["some_foreign_repo"]})
+    # The request has finished before any calls on pulp client or ubiconfig were made because
+    # repos from some unknown class were in the request.
+    mocked_apply_async.assert_not_called()
+    pulp_client.assert_not_called()
+    get_loader.assert_not_called()
+    # expected status code is 404
+    assert response.status_code == 404
+    # there is enough detail info in the response
+    json_data = response.json()
+    assert (
+        json_data["detail"]
+        == "Given repos ['some_foreign_repo'] have unexpected ids. It seems they are not "
+        "from any of the accepted repo classes ['ubi', 'client-tools'] defined in content config."
+    )
+
+
+@mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
+@mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@mock.patch("celery.app.task.Task.apply_async")
+def test_manifest_post_no_repo_ids(mocked_apply_async, pulp_client, get_loader, client):
+    """test request for depsolving for empty list of repo ids"""
+    response = client.post("/api/v1/manifest", json={"repo_ids": []})
+    # The request has finished before any calls on pulp client or ubiconfig were made because
+    # no repos were provided in the request.
+    mocked_apply_async.assert_not_called()
+    pulp_client.assert_not_called()
+    get_loader.assert_not_called()
+    # expected status code is 400
+    assert response.status_code == 400
+    # there is enough detail info in the response
+    json_data = response.json()
+    assert json_data["detail"] == "No repo IDs were provided."

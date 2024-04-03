@@ -16,14 +16,12 @@ class Config:
     pulp_cert: str = "path/to/cert"
     pulp_key: str = "path/to/key"
     pulp_verify: Union[bool, str] = True
-    content_config: dict[str, str] = {"group_prefix": "url_or_dir"}
-    allowed_ubi_repo_groups: dict[str, list[str]] = {
-        "group_prefix1": ["repo_1", "repo_2"]
+    content_config: dict[str, str] = {
+        "ubi": "url_or_dir_1",
+        "client-tools": "url_or_dir_2",
     }
-    imports: list[str] = [
-        "ubi_manifest.worker.tasks.depsolve",
-        "ubi_manifest.worker.tasks.repo_monitor",
-    ]
+    allowed_ubi_repo_groups: dict[str, list[str]] = {}
+    imports: list[str] = ["ubi_manifest.worker.tasks.depsolve"]
     broker_url: str = "redis://redis:6379/0"
     result_backend: str = "redis://redis:6379/0"
     # 4 hours default data expiration for redis
@@ -47,7 +45,7 @@ def make_config(celery_app: celery.Celery) -> None:
     try:
         conf_dict: dict[str, Any] = dict(config_from_file["CONFIG"])
         for conf_field in ("allowed_ubi_repo_groups", "content_config"):
-            conf_item_str = config_from_file["CONFIG"].pop(conf_field) or ""
+            conf_item_str = config_from_file["CONFIG"].pop(conf_field, "{}")
             conf_item = json.loads(re.sub(r"[\s]+", "", conf_item_str))
             conf_dict[conf_field] = conf_item
 

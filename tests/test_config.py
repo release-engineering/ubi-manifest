@@ -23,11 +23,10 @@ def test_make_config():
         assert celery_app.conf["pulp_cert"] == "path/to/pulp_cert"
         assert celery_app.conf["pulp_key"] == "path/to/pulp_key"
         assert celery_app.conf["content_config"] == {
-            "ubi": "https://gitlab.foo.bar.com/ubi-config"
+            "ubi": "https://gitlab.foo.bar.com/ubi-config",
+            "client-tools": "https://gitlab.foo.bar.com/ct-config",
         }
-        assert celery_app.conf["allowed_ubi_repo_groups"] == {
-            "ubiX:test": ["repo_1", "repo_2", "repo_3"]
-        }
+        assert celery_app.conf["allowed_ubi_repo_groups"] == {}
 
         # check properly converted fields to int types
         assert celery_app.conf["publish_limit"] == 2
