@@ -2181,13 +2181,13 @@ files = [
 
 [[package]]
 name = "ubi-config"
-version = "3.1.0"
+version = "3.1.1"
 description = "A Python Library for accessing Universal Base Image configuration"
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "ubi-config-3.1.0.tar.gz", hash = "sha256:02390c6f7abb6906207757ea0a85bf288699d1e510cf0baf504c7bd01172cc1c"},
-    {file = "ubi_config-3.1.0-py3-none-any.whl", hash = "sha256:7d1e95970f44deafdff5d8d04f11f55ec1386e24bf39dd536f2f567d84592574"},
+    {file = "ubi-config-3.1.1.tar.gz", hash = "sha256:e64dd1ce68293e005df8625e1dfa1036ae032631d33c43db6c3a97ae52149431"},
+    {file = "ubi_config-3.1.1-py3-none-any.whl", hash = "sha256:d178928f43e042185720ec1ce87352c4e6cd55f8ef4113b67fb126da8dcc0021"},
 ]
 
 [package.dependencies]
