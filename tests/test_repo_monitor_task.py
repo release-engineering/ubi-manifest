@@ -52,7 +52,9 @@ def test_repo_monitor_task(pulp, caplog):
         ],
     )
 
-    with caplog.at_level(logging.DEBUG, logger="ubi_manifest.worker.tasks.repo_monitor"):
+    with caplog.at_level(
+        logging.DEBUG, logger="ubi_manifest.worker.tasks.repo_monitor"
+    ):
         with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
             client.return_value = pulp.client
             # let run the repo_monitor task
