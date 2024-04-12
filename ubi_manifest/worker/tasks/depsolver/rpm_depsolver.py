@@ -49,11 +49,23 @@ class Depsolver:
 
         self._srpm_repos: list[Future[YumRepository]] = srpm_repos
 
-        self._provides: set[RpmDependency] = set()  # set of rpm.provides we've visited
-        self._requires: set[RpmDependency] = set()  # set of rpm.requires we've visited
+        self._provided_rpms: set[RpmDependency] = (
+            set()
+        )  # set of rpm.provides we've visited
+        self._required_rpms: set[RpmDependency] = (
+            set()
+        )  # set of rpm.requires we've visited
 
-        # set of solvables (pkg, lib, ...) that we use for checking remaining requires
-        self._unsolved: set[RpmDependency] = set()
+        self._required_files: set[RpmDependency] = (
+            set()
+        )  # set of files required by visited RPMs
+        self._provided_files: set[RpmDependency] = (
+            set()
+        )  # set of files provided by visited RPMs
+
+        # sets of solvables (pkg, lib, ...) that we use for checking remaining requires
+        self._unsolved_rpms: set[RpmDependency] = set()
+        self._unsolved_files: set[RpmDependency] = set()
 
         # Set of all modular rpms. Modifying the given modular_rpm_filenames set in place
         self._modular_rpm_filenames: set[str] = modular_rpm_filenames
@@ -122,39 +134,45 @@ class Depsolver:
         Extracts provides and requires from content and sets internal
         state of self accordingly.
         """
-        _requires = set()
+        _required_rpms = set()
+        _required_files = set()
         for rpm in content:
             for item in rpm.requires:
-                # skip scriplet requires
                 if item.name.startswith("/"):
-                    continue
-                if item.name.startswith("("):
+                    _required_files.add(item)
+                elif item.name.startswith("("):
                     # add parsed bool deps to requires that need solving
-                    _requires |= parse_bool_deps(item.name)
+                    _required_rpms |= parse_bool_deps(item.name)
                 else:
-                    _requires.add(item)
+                    _required_rpms.add(item)
 
             for item in rpm.provides:
                 # add to global provides
-                self._provides.add(item)
+                self._provided_rpms.add(item)
+
+            for filename in rpm.files or []:
+                self._provided_files.add(RpmDependency(name=filename))
 
         # update global requires
-        self._requires |= _requires
+        self._required_rpms |= _required_rpms
+        self._required_files |= _required_files
         # add new requires to unsolved
-        self._unsolved |= _requires
+        self._unsolved_rpms |= _required_rpms
+        self._unsolved_files |= _required_files - self._provided_files
 
-        for prov in self._provides:
+        for prov in self._provided_rpms:
             solved = set()
-            for req in self._unsolved:
+            for req in self._unsolved_rpms:
                 if prov.name != req.name:
                     continue
                 if is_requirement_resolved(req, prov):
                     solved.add(req)
-            self._unsolved -= solved
+            self._unsolved_rpms -= solved
 
     def what_provides(
         self,
         list_of_requires: list[RpmDependency],
+        field: str,
         repos: list[YumRepository],
         blacklist: list[PackageToExclude],
     ) -> list[UbiUnit]:
@@ -164,18 +182,29 @@ class Depsolver:
         # TODO this may pull more than more packages (with different names)
         # for given requirement. It should be decided which one should get into
         # the output. Currently we'll get all matching the query.
-        crit = create_or_criteria(
-            ["provides.name"], [(item.name,) for item in list_of_requires]
-        )
-
+        crit = create_or_criteria([field], [(item.name,) for item in list_of_requires])
         content = f_proxy(
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
-        newest_rpms = get_n_latest_from_content(
+        return get_n_latest_from_content(
             content, blacklist, self._modular_rpm_filenames  # type: ignore [arg-type]
         )
 
-        return newest_rpms
+    def resolve_files(
+        self, repos: list[YumRepository], blacklist: list[PackageToExclude]
+    ) -> list[UbiUnit]:
+        batch = []
+        for _ in range(min(len(self._unsolved_files), BATCH_SIZE_RESOLVER)):
+            batch.append(self._unsolved_files.pop())
+        return self.what_provides(batch, "files", repos, blacklist)
+
+    def resolve_rpms(
+        self, repos: list[YumRepository], blacklist: list[PackageToExclude]
+    ) -> list[UbiUnit]:
+        batch = []
+        for _ in range(min(len(self._unsolved_rpms), BATCH_SIZE_RESOLVER)):
+            batch.append(self._unsolved_rpms.pop())
+        return self.what_provides(batch, "provides.name", repos, blacklist)
 
     def get_source_pkgs(
         self, binary_rpms: list[UbiUnit], blacklist: list[PackageToExclude]
@@ -253,24 +282,19 @@ class Depsolver:
         while True and not self._base_pkgs_only:
             # extract provides and requires
             self.extract_and_resolve(to_resolve)
-            # we are finished if _unsolved is empty
-            if not self._unsolved:
+            # we are finished if _unsolved_rpms/files are empty
+            if not self._unsolved_rpms and not self._unsolved_files:
                 break
-
-            batch = []
-            # making batch as the query for provides.name in rpm units is slow in general
-            # we'll better do it in smaller batches
-            for _ in range(self._batch_size()):
-                batch.append(self._unsolved.pop())
-            # get new content that provides current batch of requires
-            resolved = self.what_provides(batch, pulp_repos, merged_blacklist)
-            # new content needs resolving deps
-            to_resolve = set(resolved)
+            # get new content that provides required RPMs and files
+            resolved = self.resolve_rpms(pulp_repos, merged_blacklist)
+            resolved.extend(self.resolve_files(pulp_repos, merged_blacklist))
             # add content to the output set
             self.output_set.update(resolved)
             # submit query for source rpms
             ft = self._executor.submit(self.get_source_pkgs, resolved, merged_blacklist)
             source_rpm_fts.append(ft)
+            # new content needs resolving
+            to_resolve = set(resolved)
 
         # wait for srpm queries and store them in the output set
         for srpm_content in as_completed(source_rpm_fts):
@@ -279,19 +303,14 @@ class Depsolver:
 
         if not self._base_pkgs_only:
             # log warnings if depsolving failed
-            deps_not_found = {req.name for req in self._requires} - {
-                prov.name for prov in self._provides
+            deps_not_found = {req.name for req in self._required_rpms} - {
+                prov.name for prov in self._provided_rpms
+            }
+            deps_not_found |= {req.name for req in self._required_files} - {
+                prov.name for prov in self._provided_files
             }
             if deps_not_found:
                 self._log_warnings(deps_not_found, pulp_repos, merged_blacklist)
-
-    def _batch_size(self) -> int:
-        if len(self._unsolved) < BATCH_SIZE_RESOLVER:
-            batch_size = len(self._unsolved)
-        else:
-            batch_size = BATCH_SIZE_RESOLVER
-
-        return batch_size
 
     def export(self) -> dict[str, list[UbiUnit]]:
         out: dict[str, list[UbiUnit]] = {}

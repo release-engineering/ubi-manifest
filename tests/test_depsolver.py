@@ -1,4 +1,3 @@
-import pytest
 from pubtools.pulplib import ModulemdUnit, RpmDependency, RpmUnit
 from testfixtures import LogCapture
 
@@ -7,22 +6,17 @@ from ubi_manifest.worker.tasks.depsolver.models import (
     PackageToExclude,
     UbiUnit,
 )
-from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import (
-    BATCH_SIZE_RESOLVER,
-    Depsolver,
-)
+from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import Depsolver
 
 from .utils import create_and_insert_repo, rpmdeps_from_names
 
 
-def test_what_provides(pulp):
+def test_resolve_rpms(pulp):
     """tests querying for provides in pulp"""
     depsolver = Depsolver(None, None, None, None)
-
-    requires = [RpmDependency(name="gcc")]
+    depsolver._unsolved_rpms = {RpmDependency(name="gcc")}
 
     repo = create_and_insert_repo(id="test_repo_id", pulp=pulp)
-
     unit_1 = RpmUnit(
         name="test",
         version="10",
@@ -31,7 +25,6 @@ def test_what_provides(pulp):
         arch="x86_64",
         provides=[RpmDependency(name="gcc")],
     )
-
     unit_2 = RpmUnit(
         name="test",
         version="100",
@@ -40,10 +33,9 @@ def test_what_provides(pulp):
         arch="x86_64",
         provides=[RpmDependency(name="gcc")],
     )
-
     pulp.insert_units(repo, [unit_1, unit_2])
 
-    result = depsolver.what_provides(requires, [repo], [])
+    result = depsolver.resolve_rpms([repo], [])
     # there is only one unit in the result with the highest version
     assert len(result) == 1
     unit = result[0]
@@ -51,14 +43,49 @@ def test_what_provides(pulp):
     assert unit.provides[0].name == "gcc"
 
 
+def test_resolve_files(pulp):
+    """tests querying for files in pulp"""
+    depsolver = Depsolver(None, None, None, None)
+    depsolver._unsolved_files = {RpmDependency(name="/some/script")}
+
+    repo = create_and_insert_repo(id="test_repo_id", pulp=pulp)
+    unit_1 = RpmUnit(
+        name="test",
+        version="1",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[RpmDependency(name="gcc")],
+        files=["/some/script"],
+    )
+    unit_2 = RpmUnit(
+        name="test",
+        version="2",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[RpmDependency(name="gcc")],
+        files=["/some/script"],
+    )
+    pulp.insert_units(repo, [unit_1, unit_2])
+
+    result = depsolver.resolve_files([repo], [])
+    # there is only one unit in the result with the highest version
+    assert len(result) == 1
+    unit = result[0]
+    assert unit.version == "2"
+    assert unit.files[0] == "/some/script"
+
+
 def test_extract_and_resolve():
     """test extracting provides and requires from RPM units"""
     depsolver = Depsolver(None, None, None, None)
 
     # set initial data to depsolver instance
-    depsolver._requires = rpmdeps_from_names("pkg_a", "pkg_b")
-    depsolver._provides = rpmdeps_from_names("pkg_c", "pkg_d")
-    depsolver._unsolved = rpmdeps_from_names("pkg_a", "pkg_b")
+    depsolver._required_rpms = rpmdeps_from_names("pkg_a", "pkg_b")
+    depsolver._provided_rpms = rpmdeps_from_names("pkg_c", "pkg_d")
+    depsolver._unsolved_rpms = rpmdeps_from_names("pkg_a", "pkg_b")
+    depsolver._required_files = {"/some/file"}
 
     unit = RpmUnit(
         name="test",
@@ -68,18 +95,25 @@ def test_extract_and_resolve():
         arch="x86_64",
         provides=[RpmDependency(name="pkg_e"), RpmDependency(name="pkg_b")],
         requires=[RpmDependency(name="pkg_f"), RpmDependency(name="(pkg_g if pkg_h)")],
+        files=["/some/file"],
     )
 
     depsolver.extract_and_resolve([unit])
     # internal state of depsolver should change
     # pkg_f, pkg_g and pkg_h are new requirements that are added to the requires set
-    assert depsolver._requires == rpmdeps_from_names(
+    assert depsolver._required_rpms == rpmdeps_from_names(
         "pkg_a", "pkg_b", "pkg_f", "pkg_g", "pkg_h"
     )
     # pkg_e and pkg_b are added to the provides set
-    assert depsolver._provides == rpmdeps_from_names("pkg_c", "pkg_d", "pkg_e", "pkg_b")
+    assert depsolver._provided_rpms == rpmdeps_from_names(
+        "pkg_c", "pkg_d", "pkg_e", "pkg_b"
+    )
     # pkg_b is resolved but pkg_f, pkg_g and pkg_h are added as new unsolved requirement
-    assert depsolver._unsolved == rpmdeps_from_names("pkg_a", "pkg_f", "pkg_g", "pkg_h")
+    assert depsolver._unsolved_rpms == rpmdeps_from_names(
+        "pkg_a", "pkg_f", "pkg_g", "pkg_h"
+    )
+    # the file requirement should have been cleared, 'test' unit resolves it
+    assert depsolver._unsolved_files == set()
 
 
 def test_get_base_packages(pulp):
@@ -177,23 +211,6 @@ def test_get_pkgs_from_all_modules(pulp):
     assert result == expected_filenames
 
 
-@pytest.mark.parametrize(
-    "items, expected_batch_size",
-    [
-        (BATCH_SIZE_RESOLVER + 1, BATCH_SIZE_RESOLVER),
-        (BATCH_SIZE_RESOLVER - 1, BATCH_SIZE_RESOLVER - 1),
-    ],
-)
-def test_batch_size(items, expected_batch_size):
-    """test proper calculation of a batch size"""
-    depsolver = Depsolver(None, None, None, None)
-    depsolver._unsolved = {x for x in range(items)}
-
-    batch_size = depsolver._batch_size()
-
-    assert batch_size == expected_batch_size
-
-
 def test_run(pulp):
     """test the main method of depsolver"""
     repos, repo_srpm, expected_output_set = _prepare_test_data(pulp)
@@ -202,8 +219,6 @@ def test_run(pulp):
         PackageToExclude("lib_exclude"),
         PackageToExclude("blacklisted-", globbing=True),
     ]
-    blacklist_2 = [PackageToExclude("base_pkg_to_exclude")]
-
     whitelist_1 = set(["gcc", "jq", "perl-version"])
     dep_item_1 = DepsolverItem(
         whitelist=whitelist_1,
@@ -211,6 +226,7 @@ def test_run(pulp):
         in_pulp_repos=[repos[0]],
     )
 
+    blacklist_2 = [PackageToExclude("base_pkg_to_exclude")]
     whitelist_2 = set(
         [
             "apr",
@@ -239,7 +255,7 @@ def test_run(pulp):
 
             # check internal state of depsolver object
             # provides set holds all capabilities that we went through during depsolving
-            assert depsolver._provides == rpmdeps_from_names(
+            assert depsolver._provided_rpms == rpmdeps_from_names(
                 "gcc",
                 "jq",
                 "apr",
@@ -254,7 +270,7 @@ def test_run(pulp):
             )
 
             # requires set holds all requires that we went through during depsolving
-            assert depsolver._requires == rpmdeps_from_names(
+            assert depsolver._required_rpms == rpmdeps_from_names(
                 "blacklisted-package",
                 "lib.a",
                 "lib.b",
@@ -270,11 +286,12 @@ def test_run(pulp):
 
             # unsolved set should be empty after depsolving finishes
             # it will be emptied even if we have unsolvable dependency
-            assert len(depsolver._unsolved) == 0
+            assert len(depsolver._unsolved_rpms) == 0
+            assert len(depsolver._unsolved_files) == 0
 
             # there are unsolved requires, we can get those by
-            unsolved = {req.name for req in depsolver._requires} - {
-                prov.name for prov in depsolver._provides
+            unsolved = {req.name for req in depsolver._required_rpms} - {
+                prov.name for prov in depsolver._provided_rpms
             }
             # there are exactly 5 unresolved deps, lib_exclude and blacklisted-package unsolved due to blacklisting
             assert unsolved == set(
@@ -361,7 +378,6 @@ def _prepare_test_data(pulp):
             RpmDependency(name="/some/script"),
         ],
     )
-    # note: the dependency "/some/script" will be skipped from processing
 
     unit_3 = RpmUnit(
         name="apr",
@@ -381,6 +397,7 @@ def _prepare_test_data(pulp):
         arch="x86_64",
         provides=[RpmDependency(name="babel"), RpmDependency(name="lib.b")],
         requires=[RpmDependency(name="lib.a"), RpmDependency(name="lib.b")],
+        files=["/some/file", "/another/file", "/yet/another/file"],
     )
 
     unit_5 = RpmUnit(
@@ -458,28 +475,6 @@ def _prepare_test_data(pulp):
         content_type_id="srpm",
     )
 
-    md_unit_1 = ModulemdUnit(
-        name="test",
-        stream="10",
-        version=100,
-        context="abcdef",
-        arch="x86_64",
-        artifacts=[
-            "perl-version-7:0.99.24-441.module+el8.3.0+6718+7f269185.src",
-            "perl-version-7:0.99.24-441.module+el8.3.0+6718+7f269185.x86_64",
-        ],
-    )
-    md_unit_2 = ModulemdUnit(
-        name="test",
-        stream="20",
-        version=100,
-        context="abcdef",
-        arch="x86_64",
-        artifacts=[
-            "perl-version-7:1.99.24-441.module+el8.4.0+9911+7f269185.src",
-            "perl-version-7:1.99.24-441.module+el8.4.0+9911+7f269185.x86_64",
-        ],
-    )
     # unit_11a/b are modular units, both of them has to be added to the output set
     # because they're listed on some module's artifacts
     unit_11a = RpmUnit(
@@ -538,7 +533,50 @@ def _prepare_test_data(pulp):
         requires=[],
     )
 
-    repo_1_units = [unit_1, unit_2, unit_5, unit_11a, unit_11b, unit_11c, unit_12]
+    unit_14 = RpmUnit(
+        name="rando-lib",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[],
+        requires=[],
+        files=["/some/script", "/another/script"],
+    )
+
+    md_unit_1 = ModulemdUnit(
+        name="test",
+        stream="10",
+        version=100,
+        context="abcdef",
+        arch="x86_64",
+        artifacts=[
+            "perl-version-7:0.99.24-441.module+el8.3.0+6718+7f269185.src",
+            "perl-version-7:0.99.24-441.module+el8.3.0+6718+7f269185.x86_64",
+        ],
+    )
+    md_unit_2 = ModulemdUnit(
+        name="test",
+        stream="20",
+        version=100,
+        context="abcdef",
+        arch="x86_64",
+        artifacts=[
+            "perl-version-7:1.99.24-441.module+el8.4.0+9911+7f269185.src",
+            "perl-version-7:1.99.24-441.module+el8.4.0+9911+7f269185.x86_64",
+        ],
+    )
+
+    repo_1_units = [
+        unit_1,
+        unit_2,
+        unit_5,
+        unit_11a,
+        unit_11b,
+        unit_11c,
+        unit_12,
+        unit_14,
+    ]
     repo_2_units = [unit_3, unit_4, unit_6]
     repo_srpm_units = [unit_9, unit_10]
 
@@ -648,18 +686,18 @@ def test_run_modular_deps(pulp):
         depsolver.run()
         # check internal state of depsolver object
         # provides set holds all capabilities that we went through during depsolving
-        assert depsolver._provides == all_provides
+        assert depsolver._provided_rpms == all_provides
 
         # requires set holds all requires that we went through during depsolving
-        assert depsolver._requires == all_requires
+        assert depsolver._required_rpms == all_requires
 
         # unsolved set should be empty after depsolving finishes
         # it will be emptied even if we have unsolvable dependency
-        assert len(depsolver._unsolved) == 0
+        assert len(depsolver._unsolved_rpms) == 0
 
         # there are unsolved requires, we can get those by
-        unsolved = {req.name for req in depsolver._requires} - {
-            prov.name for prov in depsolver._provides
+        unsolved = {req.name for req in depsolver._required_rpms} - {
+            prov.name for prov in depsolver._provided_rpms
         }
         # there is no unsolved dep.
         assert len(unsolved) == 0
@@ -817,11 +855,11 @@ def test_run_with_skipped_depsolving(pulp):
         depsolver.run()
         # check internal state of depsolver object
         # with provided flag base_pkgs_only:True we don't store any of provides|requires
-        assert depsolver._provides == set()
+        assert depsolver._provided_rpms == set()
 
-        assert depsolver._requires == set()
+        assert depsolver._required_rpms == set()
 
-        assert len(depsolver._unsolved) == 0
+        assert len(depsolver._unsolved_rpms) == 0
 
         # checking correct rpm and srpm names and its associate source repo id
         output = [

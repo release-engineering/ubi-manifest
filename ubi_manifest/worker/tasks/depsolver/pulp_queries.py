@@ -18,7 +18,7 @@ from .utils import flatten_list_of_sets
 
 BATCH_SIZE = int(os.getenv("UBI_MANIFEST_BATCH_SIZE", "250"))
 
-RPM_FIELDS = ["name", "filename", "sourcerpm", "requires", "provides"]
+RPM_FIELDS = ["name", "filename", "sourcerpm", "requires", "provides", "files"]
 MODULEMD_FIELDS = [
     "name",
     "stream",
