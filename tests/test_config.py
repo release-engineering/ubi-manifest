@@ -28,3 +28,7 @@ def test_make_config():
         assert celery_app.conf["allowed_ubi_repo_groups"] == {
             "ubiX:test": ["repo_1", "repo_2", "repo_3"]
         }
+
+        # check properly converted fields to int types
+        assert celery_app.conf["publish_limit"] == 2
+        assert celery_app.conf["ubi_manifest_data_expiration"] == 4444
