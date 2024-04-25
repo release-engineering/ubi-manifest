@@ -1,8 +1,10 @@
+from unittest.mock import Mock, patch
+
 import pytest
 from pubtools.pulplib import YumRepository
-from unittest.mock import patch, Mock
 
 from ubi_manifest.app import utils
+
 from .utils import create_and_insert_repo, create_mock_configs
 
 

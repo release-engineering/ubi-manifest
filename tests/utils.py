@@ -1,6 +1,7 @@
+from unittest.mock import Mock
+
 import ubiconfig
 from attrs import define
-from unittest.mock import Mock
 from pubtools.pulplib import RpmDependency, YumRepository
 
 

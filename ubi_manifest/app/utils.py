@@ -1,12 +1,10 @@
 import logging
-
 from typing import Any
 
 import ubiconfig
-from pubtools.pulplib import Criteria, Client
+from pubtools.pulplib import Client, Criteria
 
 from ubi_manifest.worker.tasks.depsolver.utils import make_pulp_client
-
 
 _LOG = logging.getLogger(__name__)
 
