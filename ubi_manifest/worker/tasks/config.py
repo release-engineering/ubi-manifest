@@ -5,7 +5,7 @@ import re
 from typing import Any, Union
 
 import celery
-from attrs import define
+from attrs import define, field
 
 
 @define
@@ -26,10 +26,9 @@ class Config:
     ]
     broker_url: str = "redis://redis:6379/0"
     result_backend: str = "redis://redis:6379/0"
-    ubi_manifest_data_expiration: int = (
-        60 * 60 * 4
-    )  # 4 hours default data expiration for redis
-    publish_limit: int = 6  # in hours
+    # 4 hours default data expiration for redis
+    ubi_manifest_data_expiration: int = field(converter=int, default=60 * 60 * 4)
+    publish_limit: int = field(converter=int, default=6)  # in hours
     beat_schedule: dict[str, dict[str, Any]] = {
         "monitor-repo-every-N-hours": {
             "task": "ubi_manifest.worker.tasks.repo_monitor.repo_monitor_task",
