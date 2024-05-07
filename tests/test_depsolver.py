@@ -211,6 +211,94 @@ def test_get_pkgs_from_all_modules(pulp):
     assert result == expected_filenames
 
 
+def test_get_source_pkgs(pulp):
+    """test queries for source rpms"""
+    unit_1 = RpmUnit(
+        name="test1",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        sourcerpm="test1.src.rpm",
+    )
+    unit_2 = RpmUnit(
+        name="test1",
+        filename="test1.src.rpm",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+    )
+    unit_3 = RpmUnit(
+        name="test-exclude",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        sourcerpm="test-exclude.src.rpm",
+    )
+    unit_4 = RpmUnit(
+        name="test-exclude",
+        filename="test-exclude.src.rpm",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+    )
+    unit_5 = RpmUnit(
+        name="test2",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        sourcerpm="test2.src.rpm",
+    )
+    unit_6 = RpmUnit(
+        name="test2",
+        filename="test2.src.rpm",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+    )
+
+
+    repo = create_and_insert_repo(id="test_repo", pulp=pulp)
+    repo_srpm = create_and_insert_repo(id="test_repo_srpm", pulp=pulp)
+
+    pulp.insert_units(repo, [unit_1, unit_3, unit_5])
+    pulp.insert_units(repo_srpm, [unit_2, unit_4, unit_6])
+
+    blacklist = [PackageToExclude("test-exc", globbing=True)]
+
+    depsolver = Depsolver(None, None, None, None)
+    depsolver._srpm_repos = [repo_srpm]
+    # simulate one previously found srpm
+    depsolver.srpm_output_set = {unit_2}
+
+    result = depsolver.get_source_pkgs([unit_1, unit_3, unit_5], blacklist)
+    # result should contain only unit_6, the one srpm not already found or blacklisted
+    assert len(result) == 1
+    assert list(result)[0].filename == unit_6.filename
+
+
+@pytest.mark.parametrize(
+    "items, expected_batch_size",
+    [
+        (BATCH_SIZE_RESOLVER + 1, BATCH_SIZE_RESOLVER),
+        (BATCH_SIZE_RESOLVER - 1, BATCH_SIZE_RESOLVER - 1),
+    ],
+)
+def test_batch_size(items, expected_batch_size):
+    """test proper calculation of a batch size"""
+    depsolver = Depsolver(None, None, None, None)
+    depsolver._unsolved = {x for x in range(items)}
+
+    batch_size = depsolver._batch_size()
+
+    assert batch_size == expected_batch_size
+
+
 def test_run(pulp):
     """test the main method of depsolver"""
     repos, repo_srpm, expected_output_set = _prepare_test_data(pulp)

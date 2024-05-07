@@ -209,10 +209,17 @@ class Depsolver:
     def get_source_pkgs(
         self, binary_rpms: list[UbiUnit], blacklist: list[PackageToExclude]
     ) -> set[UbiUnit]:
-        crit = create_or_criteria(
-            ["filename"], [(rpm.sourcerpm,) for rpm in binary_rpms if rpm.sourcerpm]
-        )
+        # Search associated source repos for srpms not previously found
+        found_srpms = [srpm.filename for srpm in self.srpm_output_set]
 
+        target_srpms = []
+        for rpm in binary_rpms:
+            if rpm.sourcerpm and rpm.sourcerpm not in found_srpms:
+                target_srpms.append(rpm.sourcerpm)
+                # TODO: Also limit repos searched to srpm counterpart
+                # target_repos.append(srpm match for rpm.associate_source_repo_id)
+
+        crit = create_or_criteria(["filename"], [(name,) for name in target_srpms])
         content = f_proxy(
             self._executor.submit(
                 search_rpms, crit, self._srpm_repos, BATCH_SIZE_RPM_SPECIFIC
