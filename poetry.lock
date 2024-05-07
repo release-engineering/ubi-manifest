@@ -2263,13 +2263,13 @@ pbr = ">=2.0.0,<2.1.0 || >2.1.0"
 
 [[package]]
 name = "testfixtures"
-version = "8.1.0"
+version = "8.2.0"
 description = "A collection of helpers and mock objects for unit tests and doc tests."
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "testfixtures-8.1.0-py3-none-any.whl", hash = "sha256:ec70aa421ed18004f0aff31fa8f319fd2322253f557796a2f754d785dc40495d"},
-    {file = "testfixtures-8.1.0.tar.gz", hash = "sha256:80848990304859c3a2b68dfe4bcaf77b6e6425a3925047bc25a52755277bfa6d"},
+    {file = "testfixtures-8.2.0-py3-none-any.whl", hash = "sha256:2896b81ece2e30356baf8d76931a7bf4b8f0d58a707ea120dd5d021b20e7d5af"},
+    {file = "testfixtures-8.2.0.tar.gz", hash = "sha256:ef43b657134c87e8a3044f4b02a32ae2ebddf44b2b97bc7989a20116403988ee"},
 ]
 
 [package.extras]
