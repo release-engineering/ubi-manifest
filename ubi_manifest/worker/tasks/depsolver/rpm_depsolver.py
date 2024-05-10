@@ -207,26 +207,34 @@ class Depsolver:
         return self.what_provides(batch, "provides.name", repos, blacklist)
 
     def get_source_pkgs(
-        self, binary_rpms: list[UbiUnit], blacklist: list[PackageToExclude]
+        self,
+        binary_rpms: set[UbiUnit],
+        binary_repos: list[YumRepository],
+        blacklist: list[PackageToExclude],
     ) -> set[UbiUnit]:
-        # Search associated source repos for srpms not previously found
-        found_srpms = [srpm.filename for srpm in self.srpm_output_set]
+        srpm_repos = set()
+        filenames = set()
 
-        target_srpms = []
-        for rpm in binary_rpms:
-            if rpm.sourcerpm and rpm.sourcerpm not in found_srpms:
-                target_srpms.append(rpm.sourcerpm)
-                # TODO: Also limit repos searched to srpm counterpart
-                # target_repos.append(srpm match for rpm.associate_source_repo_id)
+        for repo in binary_repos:
+            if not repo.relative_url:
+                continue
+            for rpm in binary_rpms:
+                if rpm.sourcerpm and rpm.associate_source_repo_id == repo.id:
+                    srpm_repo = repo.get_source_repository().result()
+                    if srpm_repo:
+                        srpm_repos.add(srpm_repo)
+                        filenames.add(rpm.sourcerpm)
 
-        crit = create_or_criteria(["filename"], [(name,) for name in target_srpms])
+        if not srpm_repos or not filenames:
+            return set()
+
+        crit = create_or_criteria(["filename"], [(name,) for name in filenames])
         content = f_proxy(
             self._executor.submit(
-                search_rpms, crit, self._srpm_repos, BATCH_SIZE_RPM_SPECIFIC
+                search_rpms, crit, list(srpm_repos), BATCH_SIZE_RPM_SPECIFIC
             )
         )
-
-        return {rpm for rpm in content if not _is_blacklisted(rpm, blacklist)}  # type: ignore [attr-defined]
+        return {srpm for srpm in content if not _is_blacklisted(srpm, blacklist)}  # type: ignore [attr-defined]
 
     def run(self) -> None:
         """
@@ -274,14 +282,9 @@ class Depsolver:
                 )
             )
 
-        # Get source rpms of found base packages and binary/debug modular packages
-        source_rpm_fts = []
+        # wait for base and binary/debug module packages
         for content in as_completed(content_fts):
             self.output_set.update(content.result())
-            ft = self._executor.submit(
-                self.get_source_pkgs, content.result(), merged_blacklist
-            )
-            source_rpm_fts.append(ft)
 
         self._log_missing_base_pkgs()
 
@@ -297,16 +300,12 @@ class Depsolver:
             resolved.extend(self.resolve_files(pulp_repos, merged_blacklist))
             # add content to the output set
             self.output_set.update(resolved)
-            # submit query for source rpms
-            ft = self._executor.submit(self.get_source_pkgs, resolved, merged_blacklist)
-            source_rpm_fts.append(ft)
             # new content needs resolving
             to_resolve = set(resolved)
 
-        # wait for srpm queries and store them in the output set
-        for srpm_content in as_completed(source_rpm_fts):
-            for srpm in srpm_content.result():
-                self.srpm_output_set.add(srpm)
+        self.srpm_output_set |= self.get_source_pkgs(
+            self.output_set, pulp_repos, merged_blacklist
+        )
 
         if not self._base_pkgs_only:
             # log warnings if depsolving failed
