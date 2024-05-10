@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import ubiconfig
 from attrs import define
 from pubtools.pulplib import RpmDependency, YumRepository
@@ -8,6 +10,27 @@ def create_and_insert_repo(**kwargs):
     pulp.insert_repository(YumRepository(**kwargs))
 
     return pulp.client.get_repository(kwargs["id"])
+
+
+def create_mock_configs(n, flags=None, versions=None):
+    """
+    Creates n mock config objects with the given flags.
+    """
+    configs = []
+    if not flags:
+        flags = [{} for _i in range(n)]
+    if not versions:
+        versions = ["8" for _i in range(n)]
+
+    for i in range(n):
+        config = Mock(
+            version=versions[i],
+            flags=Mock(as_dict=Mock(return_value=flags[i])),
+            content_sets=Mock(rpm=Mock(output=f"content_set_{i}")),
+        )
+        configs.append(config)
+
+    return configs
 
 
 class MockLoader:

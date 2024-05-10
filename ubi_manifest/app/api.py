@@ -7,6 +7,7 @@ from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.tasks.depsolve import depsolve_task
 
 from .models import DepsolveItem, DepsolverResult, DepsolverResultItem, TaskState
+from .utils import get_items_for_depsolving, get_repo_classes
 
 router = APIRouter(prefix="/api/v1")
 
@@ -47,28 +48,40 @@ def status() -> dict[str, str]:
     },
 )
 def manifest_post(depsolve_item: DepsolveItem) -> list[TaskState]:
-    repo_groups: dict[str, list[str]] = {}
-    # compare provided repo_ids with the config and pick allowed repo groups
-    for repo_id in depsolve_item.repo_ids:
-        for key, group in app.conf.allowed_ubi_repo_groups.items():
-            if repo_id in group:
-                repo_groups.setdefault(key, group)
+    if not depsolve_item.repo_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="No repo IDs were provided.",
+        )
 
-    if not repo_groups:
+    repo_classes = get_repo_classes(app.conf.content_config, depsolve_item.repo_ids)
+    # we expect exactly one repo class in one request
+    if len(repo_classes) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Can't process repos from different classes {repo_classes} "
+            "in one request. Please make separate request for each class.",
+        )
+    if len(repo_classes) == 0:
         raise HTTPException(
             status_code=404,
-            detail=f"None of {depsolve_item.repo_ids} are allowed for depsolving.",
+            detail=f"Given repos {depsolve_item.repo_ids} have unexpected ids. "
+            "It seems they are not from any of the accepted repo classes "
+            f"{list(app.conf.content_config.keys())} defined in content config.",
+        )
+
+    depsolve_items = get_items_for_depsolving(
+        app.conf, depsolve_item.repo_ids, repo_classes[0]
+    )
+    if not depsolve_items:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No depsolve items were identified for {depsolve_item.repo_ids}.",
         )
 
     tasks_states = []
-    for repo_group_key, repo_group in repo_groups.items():
-        content_config_source = None
-        for group_prefix, source in app.conf.content_config.items():
-            if repo_group_key.startswith(group_prefix):
-                content_config_source = source
-                break
-
-        task = depsolve_task.apply_async(args=[repo_group, content_config_source])
+    for item in depsolve_items:
+        task = depsolve_task.apply_async(args=[item["repo_group"], item["url"]])
         tasks_states.append(TaskState(task_id=task.task_id, state=task.state))
 
     return tasks_states
