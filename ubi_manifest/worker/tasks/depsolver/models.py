@@ -23,12 +23,15 @@ class UbiUnit:
     def isinstance_inner_unit(self, klass: Unit) -> bool:
         return isinstance(self._unit, klass)
 
-    # TODO make this return hash of self._unit if possible in future
-    # it should help us with not adding the same units into sets
-    # that differ with associate_source_repo_id attr only
-    # currently some *Unit classes from pulplib are not hashable
-    # def __hash__(self):
-    #    return hash(self._unit)
+    def __hash__(self) -> int:
+        return hash(self._unit)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, UbiUnit):
+            return (self.__hash__() == other.__hash__()) and (
+                self.associate_source_repo_id == other.associate_source_repo_id
+            )
+        return NotImplemented
 
 
 @define

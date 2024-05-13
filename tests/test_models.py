@@ -22,3 +22,12 @@ def test_ubi_unit():
     # non-existing attr will raise an error
     with pytest.raises(AttributeError):
         _ = ubi_unit.non_existing_attr
+
+
+def test_ubi_unit_bad_eq():
+    unit = RpmUnit(name="test", version="1.0", release="1", arch="x86_64")
+
+    repo_id = "test_repo_id"
+    ubi_unit = UbiUnit(unit, repo_id)
+
+    assert ubi_unit.__eq__(object()) == NotImplemented
