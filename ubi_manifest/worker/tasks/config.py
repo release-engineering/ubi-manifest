@@ -21,7 +21,10 @@ class Config:
         "client-tools": "url_or_dir_2",
     }
     allowed_ubi_repo_groups: dict[str, list[str]] = {}
-    imports: list[str] = ["ubi_manifest.worker.tasks.depsolve"]
+    imports: list[str] = [
+        "ubi_manifest.worker.tasks.depsolve",
+        "ubi_manifest.worker.tasks.repo_monitor",
+    ]
     broker_url: str = "redis://redis:6379/0"
     result_backend: str = "redis://redis:6379/0"
     # 4 hours default data expiration for redis
