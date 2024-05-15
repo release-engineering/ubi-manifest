@@ -81,8 +81,19 @@ def test_depsolve_task(pulp):
         distributors=[distributor_source],
         content_set="cs_srpm_out",
     )
+
+    distributor_rhel_source = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="rhel_source_repo",
+        relative_url="foo/rhel/source/SRPMS",
+    )
     rhel_source_repo = create_and_insert_repo(
-        id="rhel_source_repo", pulp=pulp, content_set="cs_srpm_in"
+        id=distributor_rhel_source.repo_id,
+        pulp=pulp,
+        content_set="cs_srpm_in",
+        relative_url=distributor_rhel_source.relative_url,
+        distributors=[distributor_rhel_source],
     )
 
     unit_binary = RpmUnit(
@@ -375,17 +386,17 @@ def _setup_data_multiple_population_sources(pulp):
         relative_url="foo/rhel-2/os",
     )
     rhel_repo_1 = create_and_insert_repo(
-        id="rhel_repo-1",
+        id=distributor_rhel_1.repo_id,
         pulp=pulp,
         content_set="cs_rpm_in",
-        relative_url="foo/rhel-1/os",
+        relative_url=distributor_rhel_1.relative_url,
         distributors=[distributor_rhel_1],
     )
     rhel_repo_2 = create_and_insert_repo(
-        id="rhel_repo-2",
+        id=distributor_rhel_2.repo_id,
         pulp=pulp,
         content_set="cs_rpm_in",
-        relative_url="foo/rhel-2/os",
+        relative_url=distributor_rhel_2.relative_url,
         distributors=[distributor_rhel_2],
     )
 
@@ -403,17 +414,17 @@ def _setup_data_multiple_population_sources(pulp):
     )
 
     rhel_repo_other_1 = create_and_insert_repo(
-        id="rhel_repo-other-1",
+        id=distributor_rhel_other_1.repo_id,
         pulp=pulp,
         content_set="cs_rpm_in_other",
-        relative_url="foo/rhel-other-1/os",
+        relative_url=distributor_rhel_other_1.relative_url,
         distributors=[distributor_rhel_other_1],
     )
     rhel_repo_other_2 = create_and_insert_repo(
-        id="rhel_repo-other-2",
+        id=distributor_rhel_other_2.repo_id,
         pulp=pulp,
         content_set="cs_rpm_in_other",
-        relative_url="foo/rhel-other-2/os",
+        relative_url=distributor_rhel_other_2.relative_url,
         distributors=[distributor_rhel_other_2],
     )
 
@@ -425,7 +436,7 @@ def _setup_data_multiple_population_sources(pulp):
     )
 
     ubi_debug_repo = create_and_insert_repo(
-        id="ubi_debug_repo",
+        id=distributor_debug.repo_id,
         pulp=pulp,
         population_sources=[
             "rhel_debug_repo-1",
@@ -433,7 +444,7 @@ def _setup_data_multiple_population_sources(pulp):
             "rhel_debug_repo-other-1",
             "rhel_debug_repo-other-2",
         ],
-        relative_url="foo/bar/debug",
+        relative_url=distributor_debug.relative_url,
         distributors=[distributor_debug],
         content_set="cs_debug_out",
     )
@@ -451,17 +462,17 @@ def _setup_data_multiple_population_sources(pulp):
         relative_url="foo/rhel-2/debug",
     )
     rhel_debug_repo_1 = create_and_insert_repo(
-        id="rhel_debug_repo-1",
+        id=distributor_rhel_debug_1.repo_id,
         pulp=pulp,
         content_set="cs_debug_in",
-        relative_url="foo/rhel-1/debug",
+        relative_url=distributor_rhel_debug_1.relative_url,
         distributors=[distributor_rhel_debug_1],
     )
     rhel_debug_repo_2 = create_and_insert_repo(
-        id="rhel_debug_repo-2",
+        id=distributor_rhel_debug_2.repo_id,
         pulp=pulp,
         content_set="cs_debug_in",
-        relative_url="foo/rhel-2/debug",
+        relative_url=distributor_rhel_debug_2.relative_url,
         distributors=[distributor_rhel_debug_2],
     )
 
@@ -478,17 +489,17 @@ def _setup_data_multiple_population_sources(pulp):
         relative_url="foo/rhel-other-2/debug",
     )
     rhel_debug_repo_other_1 = create_and_insert_repo(
-        id="rhel_debug_repo-other-1",
+        id=distributor_rhel_debug_other_1.repo_id,
         pulp=pulp,
         content_set="cs_debug_in_other",
-        relative_url="foo/rhel-other-1/debug",
+        relative_url=distributor_rhel_debug_other_1.relative_url,
         distributors=[distributor_rhel_debug_other_1],
     )
     rhel_debug_repo_other_2 = create_and_insert_repo(
-        id="rhel_debug_repo-other-2",
+        id=distributor_rhel_debug_other_2.repo_id,
         pulp=pulp,
         content_set="cs_debug_in_other",
-        relative_url="foo/rhel-other-2/debug",
+        relative_url=distributor_rhel_debug_other_2.relative_url,
         distributors=[distributor_rhel_debug_other_2],
     )
 
@@ -500,18 +511,54 @@ def _setup_data_multiple_population_sources(pulp):
     )
 
     ubi_source_repo = create_and_insert_repo(
-        id="ubi_source_repo",
+        id=distributor_source.repo_id,
         pulp=pulp,
-        population_sources=["rhel_source_repo", "rhel_source_repo-other"],
-        relative_url="foo/bar/source/SRPMS",
+        population_sources=[
+            "rhel_source_repo",
+            "rhel_source_repo-other",
+        ],
+        relative_url=distributor_source.relative_url,
+        ubi_config_version="8.4",
         distributors=[distributor_source],
-        content_set="cs_srpm_out",
+        content_set="cs_source_out",
+    )
+
+    distributor_rhel_source_1 = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="rhel_source_repo",
+        relative_url="foo/rhel-1/source/SRPMS",
+    )
+    distributor_rhel_source_2 = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="rhel_source_repo",
+        relative_url="foo/rhel-2/source/SRPMS",
     )
     rhel_source_repo = create_and_insert_repo(
-        id="rhel_source_repo", pulp=pulp, content_set="cs_srpm_in"
+        id=distributor_rhel_source_1.repo_id,
+        pulp=pulp,
+        content_set="cs_srpm_in",
+        distributors=[distributor_rhel_source_1, distributor_rhel_source_2],
+    )
+
+    distributor_rhel_source_other_1 = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="rhel_source_repo-other",
+        relative_url="foo/rhel-other-1/source/SRPMS",
+    )
+    distributor_rhel_source_other_2 = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="rhel_source_repo-other",
+        relative_url="foo/rhel-other-2/source/SRPMS",
     )
     rhel_source_repo_other = create_and_insert_repo(
-        id="rhel_source_repo-other", pulp=pulp, content_set="cs_srpm_in_other"
+        id=distributor_rhel_source_other_1.repo_id,
+        pulp=pulp,
+        content_set="cs_srpm_in_other",
+        distributors=[distributor_rhel_source_other_1, distributor_rhel_source_other_2],
     )
 
     unit_1 = RpmUnit(
@@ -672,17 +719,6 @@ def _setup_data_multiple_population_sources(pulp):
         requires=[],
         provides=[],
         filename="gcc_src_debug-1-0.src.rpm",
-        content_type_id="srpm",
-    )
-    unit_srpm = RpmUnit(
-        name="gcc_src",
-        version="10",
-        release="200",
-        epoch="1",
-        arch="x86_64",
-        requires=[],
-        provides=[],
-        filename="gcc_src-1-0.src.rpm",
         content_type_id="srpm",
     )
 
