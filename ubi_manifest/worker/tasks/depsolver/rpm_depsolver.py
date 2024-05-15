@@ -15,9 +15,9 @@ from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude
 from .models import DepsolverItem, UbiUnit
 from .pulp_queries import search_modulemds, search_rpms
 from .utils import (
-    is_blacklisted,
     create_or_criteria,
     get_n_latest_from_content,
+    is_blacklisted,
     is_requirement_resolved,
     parse_bool_deps,
 )
