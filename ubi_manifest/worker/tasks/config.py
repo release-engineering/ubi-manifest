@@ -7,7 +7,6 @@ from typing import Any, Union
 import celery
 from attrs import AttrsInstance, define, field, validators
 
-
 URL_REGEX = r"""^(?:[a-z]+:\/\/)?  # optional scheme
                 (?:[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b)?  # optional main part
                 (?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)$"""

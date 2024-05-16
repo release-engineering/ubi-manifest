@@ -1,8 +1,8 @@
 import configparser
 import os
-import pytest
 from unittest.mock import patch
 
+import pytest
 from celery import Celery
 
 from ubi_manifest.worker.tasks.config import make_config
