@@ -77,7 +77,7 @@ def flatten_list_of_sets(list_of_sets: list[set[Any]]) -> set[Any]:
     return out
 
 
-def _is_blacklisted(package: UbiUnit, blacklist: list[PackageToExclude]) -> bool:
+def is_blacklisted(package: UbiUnit, blacklist: list[PackageToExclude]) -> bool:
     for item in blacklist:
         if item.arch:
             if package.arch != item.arch:
@@ -104,7 +104,7 @@ def get_n_latest_from_content(
                 _LOG.debug("Skipping modular RPM %s", item.filename)
                 continue
 
-        if _is_blacklisted(item, blacklist):
+        if is_blacklisted(item, blacklist):
             continue
 
         name_rpms_maps.setdefault(item.name, []).append(item)

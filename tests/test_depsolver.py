@@ -1,4 +1,4 @@
-from pubtools.pulplib import ModulemdUnit, RpmDependency, RpmUnit
+from pubtools.pulplib import Distributor, ModulemdUnit, RpmDependency, RpmUnit
 from testfixtures import LogCapture
 
 from ubi_manifest.worker.tasks.depsolver.models import (
@@ -211,6 +211,101 @@ def test_get_pkgs_from_all_modules(pulp):
     assert result == expected_filenames
 
 
+def test_get_source_pkgs(pulp):
+    """test queries for source rpms"""
+    unit_1 = RpmUnit(
+        name="test1",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        sourcerpm="test1.src.rpm",
+    )
+    unit_2 = RpmUnit(
+        name="test1",
+        filename="test1.src.rpm",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+    )
+    unit_3 = RpmUnit(
+        name="test-exclude",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        sourcerpm="test-exclude.src.rpm",
+    )
+    unit_4 = RpmUnit(
+        name="test-exclude",
+        filename="test-exclude.src.rpm",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+    )
+    unit_5 = RpmUnit(
+        name="test2",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        sourcerpm="test2.src.rpm",
+    )
+    unit_6 = RpmUnit(
+        name="test2",
+        filename="test2.src.rpm",
+        version="100",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+    )
+
+    dist_rpm = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="test_repo",
+        relative_url="/location/repo/os",
+    )
+    dist_srpm = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="test_repo_srpm",
+        relative_url="/location/repo/source/SRPMS",
+    )
+
+    repo = create_and_insert_repo(
+        id=dist_rpm.repo_id,
+        pulp=pulp,
+        relative_url=dist_rpm.relative_url,
+        distributors=[dist_rpm],
+    )
+    repo_srpm = create_and_insert_repo(
+        id=dist_srpm.repo_id,
+        pulp=pulp,
+        relative_url=dist_srpm.relative_url,
+        distributors=[dist_srpm],
+    )
+
+    pulp.insert_units(repo, [unit_1, unit_3, unit_5])
+    pulp.insert_units(repo_srpm, [unit_2, unit_4, unit_6])
+
+    depsolver = Depsolver([repo], [repo_srpm], set(), set())
+
+    out = depsolver.get_source_pkgs(
+        binary_rpms={UbiUnit(rpm, repo.id) for rpm in [unit_1, unit_3, unit_5]},
+        binary_repos=[repo],
+        blacklist=[PackageToExclude("test-exclude")],
+    )
+
+    # Should have returned both SRPMs not blacklisted, unit_2 and unit_6
+    assert sorted([srpm.filename for srpm in out]) == [
+        unit_2.filename,
+        unit_6.filename,
+    ]
+
+
 def test_run(pulp):
     """test the main method of depsolver"""
     repos, repo_srpm, expected_output_set = _prepare_test_data(pulp)
@@ -249,7 +344,10 @@ def test_run(pulp):
 
     with LogCapture() as mock_log:
         with Depsolver(
-            [dep_item_1, dep_item_2], [repo_srpm], module_rpms, modular_filenames
+            [dep_item_1, dep_item_2],
+            [repo_srpm],
+            module_rpms,
+            modular_filenames,
         ) as depsolver:
             depsolver.run()
 
@@ -348,11 +446,50 @@ def test_run(pulp):
 
 
 def _prepare_test_data(pulp):
-    repo_1 = create_and_insert_repo(id="test_repo_1", pulp=pulp)
+    dist_r1 = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="test_repo_1",
+        relative_url="/location/repo_1/os",
+    )
+    dist_r2 = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="test_repo_2",
+        relative_url="/location/repo_2/os",
+    )
 
-    repo_2 = create_and_insert_repo(id="test_repo_2", pulp=pulp)
+    dist_sr1 = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="test_repo_srpm",
+        relative_url="/location/repo_1/source/SRPMS",
+    )
+    dist_sr2 = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="test_repo_srpm",
+        relative_url="/location/repo_2/source/SRPMS",
+    )
 
-    repo_srpm = create_and_insert_repo(id="test_repo_srpm", pulp=pulp)
+    repo_1 = create_and_insert_repo(
+        id=dist_r1.repo_id,
+        pulp=pulp,
+        relative_url=dist_r1.relative_url,
+        distributors=[dist_r1],
+    )
+    repo_2 = create_and_insert_repo(
+        id=dist_r2.repo_id,
+        pulp=pulp,
+        relative_url=dist_r2.relative_url,
+        distributors=[dist_r2],
+    )
+    repo_srpm = create_and_insert_repo(
+        id=dist_sr1.repo_id,
+        pulp=pulp,
+        relative_url=dist_sr2.relative_url,
+        distributors=[dist_sr1, dist_sr2],
+    )
 
     unit_1 = RpmUnit(
         name="gcc",
@@ -812,7 +949,9 @@ def _prepare_test_data_modular_test(pulp):
         content_type_id="rpm",
     )
 
-    repo = create_and_insert_repo(id="test_repo", pulp=pulp)
+    repo = create_and_insert_repo(
+        id="test_repo", pulp=pulp, relative_url="/location/repo/os"
+    )
 
     rpms = [rpm_non_mod_1, rpm_non_mod_2, rpm_mod_1, rpm_mod_2]
 
@@ -871,8 +1010,31 @@ def test_run_with_skipped_depsolving(pulp):
 
 
 def _prepare_test_data_skip_depsolving(pulp):
-    repo_rpm = create_and_insert_repo(id="test_repo_rpm", pulp=pulp)
-    repo_srpm = create_and_insert_repo(id="test_repo_srpm", pulp=pulp)
+    dist_rpm = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="test_repo_rpm",
+        relative_url="/location/repo/os",
+    )
+    dist_srpm = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="test_repo_srpm",
+        relative_url="/location/repo/source/SRPMS",
+    )
+
+    repo_rpm = create_and_insert_repo(
+        id=dist_rpm.repo_id,
+        pulp=pulp,
+        relative_url=dist_rpm.relative_url,
+        distributors=[dist_rpm],
+    )
+    repo_srpm = create_and_insert_repo(
+        id=dist_srpm.repo_id,
+        pulp=pulp,
+        relative_url=dist_srpm.relative_url,
+        distributors=[dist_srpm],
+    )
 
     unit_1 = RpmUnit(
         name="gcc",
@@ -902,7 +1064,6 @@ def _prepare_test_data_skip_depsolving(pulp):
         ],
         sourcerpm="dep-gcc.src.rpm",
     )
-    # note: the dependency "/some/script" will be skipped from processing
 
     unit_1_srpm = RpmUnit(
         name="gcc",
@@ -939,7 +1100,9 @@ def _prepare_test_data_skip_depsolving(pulp):
 
 
 def test_log_missing_base_pkgs(pulp):
-    repo_rpm = create_and_insert_repo(id="test_repo_rpm", pulp=pulp)
+    repo_rpm = create_and_insert_repo(
+        id="test_repo_rpm", pulp=pulp, relative_url="/location/repo/os"
+    )
     unit_1 = RpmUnit(
         name="gcc",
         version="10",
