@@ -90,13 +90,13 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
             # and different content configs, we need to make sure that
             # we use correct config for each input repo
             for input_cs, input_repos in cs_repo_map.items():
-                config = _get_content_config(
+                config = get_content_config(
                     ubi_config_loader,
                     input_cs,
                     repo.content_set,
                     repo.ubi_config_version,
                 )
-                whitelist, debuginfo_whitelist = _filter_whitelist(config)
+                whitelist, debuginfo_whitelist = filter_whitelist(config)
                 blacklist = parse_blacklist_config(config)
                 depsolver_flags[(repo.id, input_cs)] = config.flags.as_dict()
 
@@ -245,7 +245,7 @@ def _save(data: dict[str, list[UbiUnit]]) -> None:
         )
 
 
-def _filter_whitelist(ubi_config: UbiConfig) -> tuple[set[str], set[str]]:
+def filter_whitelist(ubi_config: UbiConfig) -> tuple[set[str], set[str]]:
     whitelist = set()
     debuginfo_whitelist = set()
 
@@ -333,7 +333,7 @@ def _get_population_sources_per_cs(
     return rpm_sources, debug_sources
 
 
-def _get_content_config(
+def get_content_config(
     ubi_config_loader: UbiConfigLoader, input_cs: str, output_cs: str, version: str
 ) -> UbiConfig:
     out = None
