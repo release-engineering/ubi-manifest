@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 
 from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.tasks.depsolve import depsolve_task
+from ubi_manifest import auth
 
 from .models import DepsolveItem, DepsolverResult, DepsolverResultItem, TaskState
 from .utils import get_items_for_depsolving, get_repo_classes
@@ -21,6 +22,7 @@ def status() -> dict[str, str]:
     "/manifest",
     response_model=list[TaskState],
     status_code=201,
+    dependencies=[auth.needs_role("creator")],
     responses={
         201: {
             "description": "Depsolve tasks created",
@@ -91,6 +93,7 @@ def manifest_post(depsolve_item: DepsolveItem) -> list[TaskState]:
     "/manifest/{repo_id}",
     response_model=DepsolverResult,
     status_code=200,
+    dependencies=[auth.needs_role("reader")],
     responses={
         200: {
             "description": "Depsolved content for repo_id found",
@@ -138,6 +141,7 @@ def manifest_get(repo_id: str) -> DepsolverResult:
     "/task/{task_id}",
     response_model=TaskState,
     status_code=200,
+    dependencies=[auth.needs_role("reader")],
     responses={
         200: {
             "description": "Task with task_id found",
