@@ -13,13 +13,13 @@ from pubtools.pulplib import (
 from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
 from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
 from ubi_manifest.worker.tasks.depsolver.utils import (
-    keep_n_latest_rpms,
     create_or_criteria,
     flatten_list_of_sets,
     get_criteria_for_modules,
     get_modulemd_output_set,
     get_n_latest_from_content,
     is_requirement_resolved,
+    keep_n_latest_rpms,
     parse_blacklist_config,
     parse_bool_deps,
     split_filename,

@@ -5,10 +5,10 @@ from pubtools.pulplib import Client, ModulemdUnit, RpmUnit, YumRepository
 
 from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
 from ubi_manifest.worker.tasks.depsolver.pulp_queries import (
-    search_units,
     _search_units_per_repos,
     search_modulemds,
     search_rpms,
+    search_units,
 )
 from ubi_manifest.worker.tasks.depsolver.utils import (
     create_or_criteria,
