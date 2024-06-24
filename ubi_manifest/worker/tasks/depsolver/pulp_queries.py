@@ -37,18 +37,19 @@ UNIT_FIELDS = {
 }
 
 
-def _search_units(
+def search_units(
     repo: YumRepository,
     criteria_list: list[Criteria],
     content_type_cls: Unit,
     batch_size_override: Optional[int] = None,
+    unit_fields: Optional[list[str]] = None,
 ) -> Future[set[UbiUnit]]:
     """
     Search for units of one content type associated with given repository by criteria.
     """
     units = set()
     batch_size = batch_size_override or BATCH_SIZE
-    unit_fields = UNIT_FIELDS.get(content_type_cls, None)
+    unit_fields = unit_fields or UNIT_FIELDS.get(content_type_cls, None)
 
     def handle_results(page: Page) -> Future[set[UbiUnit]]:
         for unit in page.data:
@@ -87,7 +88,7 @@ def _search_units_per_repos(
     units = []
     for repo in repos:
         units.append(
-            _search_units(
+            search_units(
                 repo,
                 or_criteria,
                 content_type_cls,

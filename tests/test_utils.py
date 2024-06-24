@@ -13,13 +13,13 @@ from pubtools.pulplib import (
 from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
 from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
 from ubi_manifest.worker.tasks.depsolver.utils import (
-    _keep_n_latest_rpms,
     create_or_criteria,
     flatten_list_of_sets,
     get_criteria_for_modules,
     get_modulemd_output_set,
     get_n_latest_from_content,
     is_requirement_resolved,
+    keep_n_latest_rpms,
     parse_blacklist_config,
     parse_bool_deps,
     split_filename,
@@ -91,7 +91,7 @@ def test_keep_n_latest_rpms():
 
     rpms = [unit_1, unit_2]
     rpms.sort(key=vercmp_sort())
-    _keep_n_latest_rpms(rpms)
+    keep_n_latest_rpms(rpms)
 
     # there should only one rpm
     assert len(rpms) == 1
@@ -136,9 +136,9 @@ def test_keep_n_latest_rpms_multiple_arches_default_n():
     )
 
     rpms = [unit_1, unit_2, unit_3, unit_4]
-    _keep_n_latest_rpms(rpms)
+    keep_n_latest_rpms(rpms)
 
-    # sort by version, the order after _keep_n_latest_rpms() is not guaranteed in this case
+    # sort by version, the order after keep_n_latest_rpms() is not guaranteed in this case
     rpms.sort(key=lambda x: x.version)
 
     # there should be 2 rpms
@@ -194,9 +194,9 @@ def test_keep_n_latest_rpms_multiple_arches_default_n_same_version():
     )
 
     rpms = [unit_1, unit_2, unit_3, unit_4]
-    _keep_n_latest_rpms(rpms)
+    keep_n_latest_rpms(rpms)
 
-    # sort by version, the order after _keep_n_latest_rpms() is not guaranteed in this case
+    # sort by version, the order after keep_n_latest_rpms() is not guaranteed in this case
     rpms.sort(key=lambda x: x.version)
 
     # there should be 2 rpms
@@ -293,7 +293,7 @@ def test_keep_n_latest_rpms_multiple_arches_different_n(n, input, expected_resul
     """Test keeping only the latest version of rpm for multiple arches
     with different `n` parameter"""
     rpms = input
-    _keep_n_latest_rpms(rpms, n)
+    keep_n_latest_rpms(rpms, n)
     # there should be specific number of rpms
     assert len(rpms) == len(expected_result)
     # check expected result, comparing sets because of unstable sort

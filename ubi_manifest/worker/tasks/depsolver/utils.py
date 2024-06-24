@@ -111,7 +111,7 @@ def get_n_latest_from_content(
 
     out = []
     for rpm_list in name_rpms_maps.values():
-        _keep_n_latest_rpms(rpm_list)
+        keep_n_latest_rpms(rpm_list)
         out.extend(rpm_list)
 
     return out
@@ -192,7 +192,7 @@ def is_requirement_resolved(requirement: RpmDependency, provider: RpmDependency)
     return out
 
 
-def _keep_n_latest_rpms(rpms: list[UbiUnit], n: int = 1) -> None:
+def keep_n_latest_rpms(rpms: list[UbiUnit], n: int = 1) -> None:
     """
     Keep n latest non-modular rpms. If there are rpms with different arches
     only pkgs with `n` highest versions are kept.
@@ -353,3 +353,25 @@ def get_criteria_for_modules(modules: list[UbiUnit]) -> list[Criteria]:
     fields = ["name", "stream"]
     or_criteria = create_or_criteria(fields, criteria_values)
     return or_criteria
+
+
+def keep_n_latest_modulemd_defaults(
+    modulemd_defaults: list[UbiUnit], n: int = 1
+) -> None:
+    """
+    Keeps n latest modulemd_defaults units, determined by greatest key in profiles.
+    """
+
+    # group defaults units in lists mapped to name+stream
+    mdd_map = defaultdict(list)
+    for mdd in modulemd_defaults:
+        mdd_map[mdd.name + mdd.stream].append(mdd)
+
+    # get the 'latest' unit belonging to each name+stream
+    module_defaults_to_keep = []
+    for mdd_list in mdd_map.values():
+        module_defaults_to_keep.extend(
+            sorted(mdd_list, key=lambda x: x.profiles.keys())[-n:]
+        )
+
+    modulemd_defaults[:] = module_defaults_to_keep

@@ -5,10 +5,10 @@ from pubtools.pulplib import Client, ModulemdUnit, RpmUnit, YumRepository
 
 from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
 from ubi_manifest.worker.tasks.depsolver.pulp_queries import (
-    _search_units,
     _search_units_per_repos,
     search_modulemds,
     search_rpms,
+    search_units,
 )
 from ubi_manifest.worker.tasks.depsolver.utils import (
     create_or_criteria,
@@ -166,7 +166,7 @@ def test_search_units(pulp):
 
     criteria = create_or_criteria(["name", "arch"], [("test", "x86_64")])
     # let Future return result
-    search_result = _search_units(repo, criteria, RpmUnit).result()
+    search_result = search_units(repo, criteria, RpmUnit).result()
 
     # result should be set
     assert isinstance(search_result, set)
@@ -198,7 +198,7 @@ def test_search_units_handle_pages(pulp):
 
     criteria = create_or_criteria(["name"], [("test",)])
 
-    search_result = _search_units(repo, criteria, RpmUnit).result()
+    search_result = search_units(repo, criteria, RpmUnit).result()
     # result should be set
     assert isinstance(search_result, set)
     # all units are retured
@@ -216,7 +216,7 @@ def test_search_units_batch_split(pulp):
 
     criteria = create_or_criteria(["name"], [("test-1",), ("test-2",), ("test-3",)])
     # batch_size_override=1 should end with 3 queries to pulp
-    search_result = _search_units(
+    search_result = search_units(
         repo, criteria, RpmUnit, batch_size_override=1
     ).result()
     # result should be of type set

@@ -76,6 +76,7 @@ class Config:
     imports: list[str] = [
         "ubi_manifest.worker.tasks.depsolve",
         "ubi_manifest.worker.tasks.repo_monitor",
+        "ubi_manifest.worker.tasks.content_audit",
     ]
     broker_url: str = field(
         validator=validators.matches_re(URL_REGEX, re.VERBOSE),
@@ -94,7 +95,13 @@ class Config:
             "schedule": int(
                 os.getenv("UBI_MANIFEST_REPO_MONITOR_SCHEDULE", str(60 * 60))
             ),  # in seconds
-        }
+        },
+        "audit-content-every-N-hours": {
+            "task": "ubi_manifest.worker.tasks.content_audit.content_audit_task",
+            "schedule": int(
+                os.getenv("UBI_MANIFEST_CONTENT_AUDIT_SCHEDULE", str((3 * 60) * 60))
+            ),  # in seconds
+        },
     }
     timezone: str = field(
         validator=validators.matches_re(TIMEZONE_REGEX), default="UTC"
