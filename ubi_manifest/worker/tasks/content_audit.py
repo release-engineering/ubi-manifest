@@ -204,7 +204,7 @@ def _compare_versions(repo_id: str, out_unit: UbiUnit, in_unit: UbiUnit) -> None
             out_unit_name = f"{out_unit.name}:{out_unit.stream}"
             warn_tuple = (out_unit_name, out_unit.profiles, in_unit.profiles)
     else:
-        if int(out_unit.version) < int(in_unit.version):
+        if str(out_unit.version) < str(in_unit.version):
             if out_unit.content_type_id == "modulemd":
                 out_unit_name = f"{out_unit.name}:{out_unit.stream}"
             else:
