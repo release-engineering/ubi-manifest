@@ -50,7 +50,7 @@ def _setup_population_sources(pulp):
 
     unit_1 = RpmUnit(
         name="gcc",
-        version="10",
+        version="9.0.1",
         release="200",
         epoch="1",
         arch="x86_64",
@@ -140,7 +140,7 @@ def test_content_audit_outdated(pulp, caplog):
     )
     unit_1 = RpmUnit(
         name="gcc",
-        version="8",  # outdated
+        version="8.2.1",  # outdated
         release="200",
         epoch="1",
         arch="x86_64",
@@ -207,7 +207,7 @@ def test_content_audit_outdated(pulp, caplog):
         expected_logs = [
             "[outdated_ubi_repo] UBI modulemd 'some_module1:fake_stream' version is outdated (current: 7, latest: 10)",
             "[outdated_ubi_repo] UBI modulemd_defaults 'some_module_defaults1:fake_stream' version is outdated",
-            "[outdated_ubi_repo] UBI rpm 'gcc' version is outdated (current: 8, latest: 10)",
+            "[outdated_ubi_repo] UBI rpm 'gcc' version is outdated (current: ('0', '8.2.1', '200'), latest: ('0', '9.0.1', '200'))",
             # we didn't add a 'pkg-debuginfo' or 'package-name-' unit (latter is blacklisted)
             "[outdated_ubi_repo] whitelisted content not found in population source repositories;\n\tpackage-name-\n\tpkg-debuginfo",
         ]

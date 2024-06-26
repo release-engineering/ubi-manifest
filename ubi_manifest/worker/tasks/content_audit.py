@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 from concurrent.futures import Future, as_completed
+from typing import Any
 
 from more_executors.futures import f_proxy
 from pubtools.pulplib import Criteria, ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
@@ -11,6 +12,7 @@ from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
 from ubi_manifest.worker.tasks.depsolver.pulp_queries import search_units
 from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
 from ubi_manifest.worker.tasks.depsolver.utils import (
+    RELATION_CMP_MAP,
     create_or_criteria,
     get_criteria_for_modules,
     is_blacklisted,
@@ -198,23 +200,27 @@ def _compare_versions(repo_id: str, out_unit: UbiUnit, in_unit: UbiUnit) -> None
     profile equality, logging a warning if input is more recent than output.
     """
 
-    warn_tuple = None
-    if out_unit.content_type_id == "modulemd_defaults":
-        if out_unit.profiles != in_unit.profiles:
-            out_unit_name = f"{out_unit.name}:{out_unit.stream}"
-            warn_tuple = (out_unit_name, out_unit.profiles, in_unit.profiles)
-    else:
-        if int(out_unit.version) < int(in_unit.version):
-            if out_unit.content_type_id == "modulemd":
-                out_unit_name = f"{out_unit.name}:{out_unit.stream}"
-            else:
-                out_unit_name = out_unit.name
-            warn_tuple = (out_unit_name, out_unit.version, in_unit.version)
-
-    if warn_tuple:
+    def log_warning(warn_tuple: tuple[str, Any, Any]) -> None:
         _LOG.warning(
             "[%s] UBI %s '%s' version is outdated (current: %s, latest: %s)",
             repo_id,
             out_unit.content_type_id,
             *warn_tuple,
         )
+
+    if out_unit.content_type_id == "modulemd_defaults":
+        if out_unit.profiles != in_unit.profiles:
+            out_unit_name = f"{out_unit.name}:{out_unit.stream}"
+            log_warning((out_unit_name, out_unit.profiles, in_unit.profiles))
+            return
+    if out_unit.content_type_id == "modulemd":
+        if out_unit.version < in_unit.version:
+            out_unit_name = f"{out_unit.name}:{out_unit.stream}"
+            log_warning((out_unit_name, out_unit.version, in_unit.version))
+            return
+    if out_unit.content_type_id == "rpm":
+        out_evr = (out_unit.epoch, out_unit.version, out_unit.release)
+        in_evr = (in_unit.epoch, in_unit.version, in_unit.release)
+        if RELATION_CMP_MAP["LT"](out_evr, in_evr):  # type: ignore [no-untyped-call]
+            log_warning((out_unit.name, out_evr, in_evr))
+            return
