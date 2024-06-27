@@ -57,7 +57,8 @@ def content_audit_task() -> None:
                 search_units(out_repo, [Criteria.true()], ModulemdDefaultsUnit)
             )
 
-            seen_units: set[UbiUnit] = set()
+            seen_rpms: set[UbiUnit] = set()
+            seen_modules: set[str] = set()
             output_whitelist: set[str] = set()
             output_blacklist: list[PackageToExclude] = []
 
@@ -103,9 +104,14 @@ def content_audit_task() -> None:
                         out_repo.content_set,
                         out_repo.ubi_config_version,
                     )
-                    whitelist, debuginfo_whitelist = filter_whitelist(config)
-                    output_whitelist |= whitelist | debuginfo_whitelist
                     output_blacklist.extend(parse_blacklist_config(config))
+                    whitelist, debuginfo_whitelist = filter_whitelist(
+                        config, output_blacklist
+                    )
+                    output_whitelist |= whitelist | debuginfo_whitelist
+                    output_whitelist |= {
+                        f"{md.name}:{md.stream}" for md in config.modules.whitelist
+                    }
 
             # check that all content is up-to-date
             out_rpms_result = out_rpms.result()
@@ -113,7 +119,7 @@ def content_audit_task() -> None:
                 for out_rpm in out_rpms_result.copy():
                     if (out_rpm.name, out_rpm.arch) == (in_rpm.name, in_rpm.arch):
                         _compare_versions(out_repo.id, out_rpm, in_rpm)
-                        seen_units.add(in_rpm)
+                        seen_rpms.add(in_rpm)
                         out_rpms_result.discard(out_rpm)
                         break
             out_mds_result = out_mds.result()
@@ -121,7 +127,7 @@ def content_audit_task() -> None:
                 for out_md in out_mds_result.copy():
                     if (out_md.name, out_md.stream) == (in_md.name, in_md.stream):
                         _compare_versions(out_repo.id, out_md, in_md)
-                        seen_units.add(in_md)
+                        seen_modules.add(f"{in_md.name}:{in_md.stream}")
                         out_mds_result.discard(out_md)
                         break
             out_mdds_result = out_mdds.result()
@@ -132,9 +138,9 @@ def content_audit_task() -> None:
                         out_mdds_result.discard(out_mdd)
                         break
 
-            # check seen units against blacklist
+            # check seen RPMs against blacklist
             if blacklisted := {
-                u.name for u in seen_units if is_blacklisted(u, output_blacklist)
+                u.name for u in seen_rpms if is_blacklisted(u, output_blacklist)
             }:
                 _LOG.warning(
                     "[%s] blacklisted content found in input repositories;\n\t%s",
@@ -142,15 +148,18 @@ def content_audit_task() -> None:
                     "\n\t".join(sorted(blacklisted)),
                 )
 
-            # check seen units off of whitelist
+            # check seen RPMs and Modules off of whitelist
+            to_check = {u.name for u in seen_rpms} | seen_modules
             for pattern in output_whitelist.copy():
-                if [u.name for u in seen_units if pattern in u.name]:
+                if matches := {name for name in to_check if pattern in name}:
                     output_whitelist.remove(pattern)
+                    # Let's not recheck those we've already found
+                    to_check -= matches
 
             # report any missing whitelisted packages for the output repo
             if output_whitelist:
                 _LOG.warning(
-                    "[%s] whitelisted content not found in population source repositories;\n\t%s",
+                    "[%s] whitelisted content missing from UBI and/or population sources;\n\t%s",
                     out_repo.id,
                     "\n\t".join(sorted(output_whitelist)),
                 )

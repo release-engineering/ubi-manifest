@@ -71,7 +71,7 @@ def _setup_population_sources(pulp):
         provides=[],
     )
     unit_3 = ModulemdUnit(
-        name="some_module1",
+        name="fake_name",
         stream="fake_stream",
         version=10,
         context="b7fad3bf",
@@ -82,7 +82,7 @@ def _setup_population_sources(pulp):
         ],
     )
     unit_4 = ModulemdUnit(
-        name="some_module2",
+        name="some_module1",
         stream="fake_stream",
         version=10,
         context="b7fad3bf",
@@ -92,27 +92,49 @@ def _setup_population_sources(pulp):
             "test-1:1.24-3.module+el8.1.0+2934+dec45db7.src",
         ],
     )
-    unit_5 = ModulemdDefaultsUnit(
+    unit_5 = ModulemdUnit(
+        name="some_module2",
+        stream="fake_stream",
+        version=10,
+        context="b7fad3bf",
+        arch="x86_64",
+        artifacts=[
+            "test-2:1.24-3.module+el8.1.0+2934+dec45db7.noarch",
+            "test-2:1.24-3.module+el8.1.0+2934+dec45db7.src",
+        ],
+    )
+    unit_6 = ModulemdDefaultsUnit(
         name="some_module_defaults1",
         stream="fake_stream",
         repo_id="ubi_repo",
         profiles={"1.1": ["default"], "1.0": []},
     )
-    unit_6 = ModulemdDefaultsUnit(
+    unit_7 = ModulemdDefaultsUnit(
         name="some_module_defaults2",
         stream="fake_stream",
         repo_id="ubi_repo",
         profiles={"1.0": ["default"]},
     )
-    unit_7 = RpmUnit(name="httpd.src", version="1", release="2", arch="x86_64")
-    unit_8 = RpmUnit(name="pkg-debuginfo.foo", version="1", release="2", arch="x86_64")
-    unit_9 = RpmUnit(name="package-name-abc", version="1", release="2", arch="x86_64")
+    unit_8 = RpmUnit(name="httpd.src", version="1", release="2", arch="x86_64")
+    unit_9 = RpmUnit(name="pkg-debuginfo.foo", version="1", release="2", arch="x86_64")
+    unit_10 = RpmUnit(name="package-name-abc", version="1", release="2", arch="x86_64")
 
     pulp.insert_units(rhel_repo_1, [unit_1, unit_3, unit_5, unit_7, unit_9])
-    pulp.insert_units(rhel_repo_2, [unit_2, unit_4, unit_6, unit_8])
+    pulp.insert_units(rhel_repo_2, [unit_2, unit_4, unit_6, unit_8, unit_10])
     pulp.insert_units(
         ubi_repo,
-        [unit_1, unit_2, unit_3, unit_4, unit_5, unit_6, unit_7, unit_8, unit_9],
+        [
+            unit_1,
+            unit_2,
+            unit_3,
+            unit_4,
+            unit_5,
+            unit_6,
+            unit_7,
+            unit_8,
+            unit_9,
+            unit_10,
+        ],
     )
 
 
@@ -194,7 +216,20 @@ def test_content_audit_outdated(pulp, caplog):
         repo_id="outdated_ubi_repo",
         profiles={"1.0": ["default"]},
     )
-    pulp.insert_units(ubi_repo, [unit_1, unit_2, unit_3, unit_4, unit_5, unit_6])
+    unit_7 = ModulemdUnit(
+        name="fake_name",
+        stream="fake_stream",
+        version=10,
+        context="b7fad3bf",
+        arch="x86_64",
+        artifacts=[
+            "test-0:1.24-3.module+el8.1.0+2934+dec45db7.noarch",
+            "test-0:1.24-3.module+el8.1.0+2934+dec45db7.src",
+        ],
+    )
+    pulp.insert_units(
+        ubi_repo, [unit_1, unit_2, unit_3, unit_4, unit_5, unit_6, unit_7]
+    )
 
     with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
         with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
@@ -208,8 +243,8 @@ def test_content_audit_outdated(pulp, caplog):
             "[outdated_ubi_repo] UBI modulemd 'some_module1:fake_stream' version is outdated (current: 7, latest: 10)",
             "[outdated_ubi_repo] UBI modulemd_defaults 'some_module_defaults1:fake_stream' version is outdated",
             "[outdated_ubi_repo] UBI rpm 'gcc' version is outdated (current: ('0', '8.2.1', '200'), latest: ('0', '9.0.1', '200'))",
-            # we didn't add a 'pkg-debuginfo' or 'package-name-' unit (latter is blacklisted)
-            "[outdated_ubi_repo] whitelisted content not found in population source repositories;\n\tpackage-name-\n\tpkg-debuginfo",
+            # we didn't add RPM 'pkg-debuginfo'
+            "[outdated_ubi_repo] whitelisted content missing from UBI and/or population sources;\n\tpkg-debuginfo",
         ]
         for real_msg, expected_msg in zip(sorted(caplog.messages), expected_logs):
             assert expected_msg in real_msg
