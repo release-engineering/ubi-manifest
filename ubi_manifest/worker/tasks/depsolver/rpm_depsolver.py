@@ -33,6 +33,22 @@ BATCH_SIZE_RESOLVER = int(os.getenv("UBI_MANIFEST_BATCH_SIZE_RESOLVER", "150"))
 MAX_WORKERS = int(os.getenv("UBI_MANIFEST_DEPSOLVER_WORKERS", "8"))
 
 
+def get_pkgs_from_all_modules(repos: list[YumRepository]) -> set[str]:
+    """
+    Search for modulemds in all input repos and extract rpm filenames.
+    """
+
+    def extract_modular_filenames() -> set[str]:
+        filenames = set()
+        for module in modules:  # type: ignore [attr-defined]
+            filenames |= set(module.artifacts_filenames)
+
+        return filenames
+
+    modules = search_modulemds([Criteria.true()], repos)
+    return extract_modular_filenames()
+
+
 class Depsolver:
     def __init__(
         self,
@@ -80,23 +96,6 @@ class Depsolver:
 
     def __exit__(self, *args: Any, **kwargs: Any) -> None:
         self._executor.__exit__(*args, **kwargs)
-
-    def _get_pkgs_from_all_modules(
-        self, repos: list[YumRepository]
-    ) -> Future[set[str]]:
-        """
-        Search for modulemds in all input repos and extract rpm filenames.
-        """
-
-        def extract_modular_filenames() -> set[str]:
-            filenames = set()
-            for module in modules:  # type: ignore [attr-defined]
-                filenames |= set(module.artifacts_filenames)
-
-            return filenames
-
-        modules = search_modulemds([Criteria.true()], repos)
-        return f_proxy(self._executor.submit(extract_modular_filenames))
 
     def get_base_packages(
         self,
@@ -269,7 +268,7 @@ class Depsolver:
         # Get modular rpms if they are not already populated from the previous run of the depsolver
         if not self._modular_rpm_filenames:
             self._modular_rpm_filenames.update(
-                self._get_pkgs_from_all_modules(pulp_repos)  # type: ignore [arg-type]
+                f_proxy(self._executor.submit(get_pkgs_from_all_modules, pulp_repos))  # type: ignore [arg-type]
             )
 
         merged_blacklist = list(

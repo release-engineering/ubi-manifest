@@ -10,6 +10,7 @@ from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.tasks.depsolve import filter_whitelist, get_content_config
 from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
 from ubi_manifest.worker.tasks.depsolver.pulp_queries import search_units
+from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import get_pkgs_from_all_modules
 from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
 from ubi_manifest.worker.tasks.depsolver.utils import (
     RELATION_CMP_MAP,
@@ -25,7 +26,7 @@ from ubi_manifest.worker.tasks.depsolver.utils import (
 
 _LOG = logging.getLogger(__name__)
 
-RPM_FIELDS = ["name", "version", "release", "arch"]
+RPM_FIELDS = ["name", "version", "release", "arch", "filename"]
 MD_FIELDS = ["name", "stream", "version", "context", "arch"]
 
 
@@ -66,9 +67,12 @@ def content_audit_task() -> None:
             in_mds_fts: list[Future[set[UbiUnit]]] = []
             in_mdds_fts: list[Future[set[UbiUnit]]] = []
 
-            for in_repo in client.search_repository(
+            in_repos = client.search_repository(
                 Criteria.with_id(out_repo.population_sources)
-            ):
+            )
+            in_mod_rpm_filenames = get_pkgs_from_all_modules(in_repos)
+
+            for in_repo in in_repos:
                 # get all corresponding units currently on input repo
                 in_rpms_fts.append(
                     search_units(
@@ -116,6 +120,11 @@ def content_audit_task() -> None:
             # check that all content is up-to-date
             out_rpms_result = out_rpms.result()
             for in_rpm in _latest_input_rpms(in_rpms_fts):
+                if in_rpm.filename in in_mod_rpm_filenames:
+                    _LOG.debug(
+                        "[%s] Skipping modular RPM %s", out_repo.id, in_rpm.filename
+                    )
+                    continue
                 for out_rpm in out_rpms_result.copy():
                     if (out_rpm.name, out_rpm.arch) == (in_rpm.name, in_rpm.arch):
                         _compare_versions(out_repo.id, out_rpm, in_rpm)

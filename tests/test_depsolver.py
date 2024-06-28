@@ -6,7 +6,7 @@ from ubi_manifest.worker.tasks.depsolver.models import (
     PackageToExclude,
     UbiUnit,
 )
-from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import Depsolver
+from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import Depsolver, get_pkgs_from_all_modules
 
 from .utils import create_and_insert_repo, rpmdeps_from_names
 
@@ -193,9 +193,7 @@ def test_get_pkgs_from_all_modules(pulp):
 
     pulp.insert_units(repo, [unit_1, unit_2])
 
-    ft = depsolver._get_pkgs_from_all_modules([repo])
-
-    result = ft.result()
+    filenames = get_pkgs_from_all_modules([repo])
 
     # there are 4 filenames according from 2 modulemd units
     expected_filenames = set(
@@ -207,8 +205,8 @@ def test_get_pkgs_from_all_modules(pulp):
         ]
     )
 
-    assert len(result) == 4
-    assert result == expected_filenames
+    assert len(filenames) == 4
+    assert filenames == expected_filenames
 
 
 def test_get_source_pkgs(pulp):

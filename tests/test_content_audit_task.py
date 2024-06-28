@@ -48,7 +48,7 @@ def _setup_population_sources(pulp):
         distributors=[distributor_rhel_2],
     )
 
-    unit_1 = RpmUnit(
+    rpm_1 = RpmUnit(
         name="gcc",
         version="9.0.1",
         release="200",
@@ -59,7 +59,7 @@ def _setup_population_sources(pulp):
         requires=[],
         provides=[],
     )
-    unit_2 = RpmUnit(
+    rpm_2 = RpmUnit(
         name="bind",
         version="10",
         release="200",
@@ -70,7 +70,19 @@ def _setup_population_sources(pulp):
         requires=[],
         provides=[],
     )
-    unit_3 = ModulemdUnit(
+    rpm_3 = RpmUnit(  # modular, should be skipped
+        name="bind",
+        version="12",
+        release="2.module+el8+2248+23d5e2f2",
+        epoch="0",
+        arch="x86_64",
+        sourcerpm="bind-12-2.module+el8+2248+23d5e2f2.src.rpm",
+        filename="bind-12-2.module+el8+2248+23d5e2f2.noarch.rpm",
+    )
+    rpm_4 = RpmUnit(name="httpd.src", version="1", release="2", arch="x86_64")
+    rpm_5 = RpmUnit(name="pkg-debuginfo.foo", version="1", release="2", arch="x86_64")
+    rpm_6 = RpmUnit(name="package-name-abc", version="1", release="2", arch="x86_64")
+    module_1 = ModulemdUnit(
         name="fake_name",
         stream="fake_stream",
         version=10,
@@ -79,9 +91,11 @@ def _setup_population_sources(pulp):
         artifacts=[
             "test-0:1.24-3.module+el8.1.0+2934+dec45db7.noarch",
             "test-0:1.24-3.module+el8.1.0+2934+dec45db7.src",
+            "bind-0:12-2.module+el8+2248+23d5e2f2.noarch",
+            "bind-0:12-2.module+el8+2248+23d5e2f2.src",
         ],
     )
-    unit_4 = ModulemdUnit(
+    module_2 = ModulemdUnit(
         name="some_module1",
         stream="fake_stream",
         version=10,
@@ -92,48 +106,34 @@ def _setup_population_sources(pulp):
             "test-1:1.24-3.module+el8.1.0+2934+dec45db7.src",
         ],
     )
-    unit_5 = ModulemdUnit(
-        name="some_module2",
-        stream="fake_stream",
-        version=10,
-        context="b7fad3bf",
-        arch="x86_64",
-        artifacts=[
-            "test-2:1.24-3.module+el8.1.0+2934+dec45db7.noarch",
-            "test-2:1.24-3.module+el8.1.0+2934+dec45db7.src",
-        ],
-    )
-    unit_6 = ModulemdDefaultsUnit(
+    default_1 = ModulemdDefaultsUnit(
         name="some_module_defaults1",
         stream="fake_stream",
         repo_id="ubi_repo",
         profiles={"1.1": ["default"], "1.0": []},
     )
-    unit_7 = ModulemdDefaultsUnit(
+    default_2 = ModulemdDefaultsUnit(
         name="some_module_defaults2",
         stream="fake_stream",
         repo_id="ubi_repo",
         profiles={"1.0": ["default"]},
     )
-    unit_8 = RpmUnit(name="httpd.src", version="1", release="2", arch="x86_64")
-    unit_9 = RpmUnit(name="pkg-debuginfo.foo", version="1", release="2", arch="x86_64")
-    unit_10 = RpmUnit(name="package-name-abc", version="1", release="2", arch="x86_64")
 
-    pulp.insert_units(rhel_repo_1, [unit_1, unit_3, unit_5, unit_7, unit_9])
-    pulp.insert_units(rhel_repo_2, [unit_2, unit_4, unit_6, unit_8, unit_10])
+    pulp.insert_units(rhel_repo_1, [rpm_1, rpm_3, rpm_5, module_1, default_1])
+    pulp.insert_units(rhel_repo_2, [rpm_2, rpm_4, rpm_6, module_2, default_2])
     pulp.insert_units(
         ubi_repo,
         [
-            unit_1,
-            unit_2,
-            unit_3,
-            unit_4,
-            unit_5,
-            unit_6,
-            unit_7,
-            unit_8,
-            unit_9,
-            unit_10,
+            rpm_1,
+            rpm_2,
+            rpm_3,
+            rpm_4,
+            rpm_5,
+            rpm_6,
+            module_1,
+            module_2,
+            default_1,
+            default_2,
         ],
     )
 
@@ -160,7 +160,7 @@ def test_content_audit_outdated(pulp, caplog):
         ubi_config_version="8",
         content_set="cs_rpm_out",
     )
-    unit_1 = RpmUnit(
+    rpm_1 = RpmUnit(
         name="gcc",
         version="8.2.1",  # outdated
         release="200",
@@ -168,10 +168,8 @@ def test_content_audit_outdated(pulp, caplog):
         arch="x86_64",
         sourcerpm="gcc_src-1-0.src.rpm",
         filename="gcc-10.200.x86_64.rpm",
-        requires=[],
-        provides=[],
     )
-    unit_2 = RpmUnit(
+    rpm_2 = RpmUnit(
         name="bind",
         version="10",
         release="200",
@@ -179,44 +177,8 @@ def test_content_audit_outdated(pulp, caplog):
         arch="x86_64",
         sourcerpm="bind_src-1-0.src.rpm",
         filename="bind-10.200.x86_64.rpm",
-        requires=[],
-        provides=[],
     )
-    unit_3 = ModulemdUnit(
-        name="some_module1",
-        stream="fake_stream",
-        version=7,  # outdated
-        context="b7fad3bf",
-        arch="x86_64",
-        artifacts=[
-            "test-0:1.24-3.module+el8.1.0+2934+dec45db7.noarch",
-            "test-0:1.24-3.module+el8.1.0+2934+dec45db7.src",
-        ],
-    )
-    unit_4 = ModulemdUnit(
-        name="some_module2",
-        stream="fake_stream",
-        version=10,
-        context="b7fad3bf",
-        arch="x86_64",
-        artifacts=[
-            "test-1:1.24-3.module+el8.1.0+2934+dec45db7.noarch",
-            "test-1:1.24-3.module+el8.1.0+2934+dec45db7.src",
-        ],
-    )
-    unit_5 = ModulemdDefaultsUnit(
-        name="some_module_defaults1",
-        stream="fake_stream",
-        repo_id="outdated_ubi_repo",
-        profiles={"1.0": ["default"]},  # outdated
-    )
-    unit_6 = ModulemdDefaultsUnit(
-        name="some_module_defaults2",
-        stream="fake_stream",
-        repo_id="outdated_ubi_repo",
-        profiles={"1.0": ["default"]},
-    )
-    unit_7 = ModulemdUnit(
+    module_1 = ModulemdUnit(
         name="fake_name",
         stream="fake_stream",
         version=10,
@@ -225,10 +187,36 @@ def test_content_audit_outdated(pulp, caplog):
         artifacts=[
             "test-0:1.24-3.module+el8.1.0+2934+dec45db7.noarch",
             "test-0:1.24-3.module+el8.1.0+2934+dec45db7.src",
+            "bind-0:12-2.module+el8+2248+23d5e2f2.noarch",
+            "bind-0:12-2.module+el8+2248+23d5e2f2.src",
         ],
     )
+    module_2 = ModulemdUnit(
+        name="some_module1",
+        stream="fake_stream",
+        version=7,  # outdated
+        context="b7fad3bf",
+        arch="x86_64",
+        artifacts=[
+            "test-0:5.module+el8.1.0+2934+dec45db7.noarch",
+            "test-0:5.module+el8.1.0+2934+dec45db7.src",
+        ],
+    )
+    default_1 = ModulemdDefaultsUnit(
+        name="some_module_defaults1",
+        stream="fake_stream",
+        repo_id="outdated_ubi_repo",
+        profiles={"1.0": ["default"]},  # outdated
+    )
+    default_2 = ModulemdDefaultsUnit(
+        name="some_module_defaults2",
+        stream="fake_stream",
+        repo_id="outdated_ubi_repo",
+        profiles={"1.0": ["default"]},
+    )
     pulp.insert_units(
-        ubi_repo, [unit_1, unit_2, unit_3, unit_4, unit_5, unit_6, unit_7]
+        ubi_repo,
+        [rpm_1, rpm_2, module_1, module_2, default_1, default_2],
     )
 
     with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
@@ -240,6 +228,7 @@ def test_content_audit_outdated(pulp, caplog):
 
         # should have logged warnings
         expected_logs = [
+            "[outdated_ubi_repo] Skipping modular RPM bind-12-2.module+el8+2248+23d5e2f2.noarch.rpm",
             "[outdated_ubi_repo] UBI modulemd 'some_module1:fake_stream' version is outdated (current: 7, latest: 10)",
             "[outdated_ubi_repo] UBI modulemd_defaults 'some_module_defaults1:fake_stream' version is outdated",
             "[outdated_ubi_repo] UBI rpm 'gcc' version is outdated (current: ('0', '8.2.1', '200'), latest: ('0', '9.0.1', '200'))",
