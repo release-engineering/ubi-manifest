@@ -6,7 +6,10 @@ from ubi_manifest.worker.tasks.depsolver.models import (
     PackageToExclude,
     UbiUnit,
 )
-from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import Depsolver, get_pkgs_from_all_modules
+from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import (
+    Depsolver,
+    get_pkgs_from_all_modules,
+)
 
 from .utils import create_and_insert_repo, rpmdeps_from_names
 
