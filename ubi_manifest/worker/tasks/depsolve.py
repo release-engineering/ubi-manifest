@@ -19,12 +19,14 @@ from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.tasks.depsolver.models import (
     DepsolverItem,
     ModularDepsolverItem,
+    PackageToExclude,
     UbiUnit,
 )
 from ubi_manifest.worker.tasks.depsolver.modulemd_depsolver import ModularDepsolver
 from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import Depsolver
 from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
 from ubi_manifest.worker.tasks.depsolver.utils import (
+    is_blacklisted,
     make_pulp_client,
     parse_blacklist_config,
     remap_keys,
@@ -96,8 +98,8 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
                     repo.content_set,
                     repo.ubi_config_version,
                 )
-                whitelist, debuginfo_whitelist = filter_whitelist(config)
                 blacklist = parse_blacklist_config(config)
+                whitelist, debuginfo_whitelist = filter_whitelist(config, blacklist)
                 depsolver_flags[(repo.id, input_cs)] = config.flags.as_dict()
 
                 dep_map[(repo.id, input_cs)] = DepsolverItem(
@@ -245,12 +247,16 @@ def _save(data: dict[str, list[UbiUnit]]) -> None:
         )
 
 
-def filter_whitelist(ubi_config: UbiConfig) -> tuple[set[str], set[str]]:
+def filter_whitelist(
+    ubi_config: UbiConfig, blacklist: list[PackageToExclude]
+) -> tuple[set[str], set[str]]:
     whitelist = set()
     debuginfo_whitelist = set()
 
     for pkg in ubi_config.packages.whitelist:
         if pkg.arch == "src":
+            continue
+        if is_blacklisted(pkg, blacklist):
             continue
         if pkg.name.endswith("debuginfo") or pkg.name.endswith("debugsource"):
             debuginfo_whitelist.add(pkg.name)
