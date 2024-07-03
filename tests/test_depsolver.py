@@ -1,15 +1,9 @@
 from pubtools.pulplib import Distributor, ModulemdUnit, RpmDependency, RpmUnit
 from testfixtures import LogCapture
 
-from ubi_manifest.worker.tasks.depsolver.models import (
-    DepsolverItem,
-    PackageToExclude,
-    UbiUnit,
-)
-from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import (
-    Depsolver,
-    get_pkgs_from_all_modules,
-)
+from ubi_manifest.worker.common import get_pkgs_from_all_modules
+from ubi_manifest.worker.models import DepsolverItem, PackageToExclude, UbiUnit
+from ubi_manifest.worker.tasks.depsolver import Depsolver
 
 from .utils import create_and_insert_repo, rpmdeps_from_names
 

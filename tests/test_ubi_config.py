@@ -1,6 +1,6 @@
 from unittest import mock
 
-from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
+from ubi_manifest.worker.ubi_config import UbiConfigLoader
 
 from .utils import MockLoader
 

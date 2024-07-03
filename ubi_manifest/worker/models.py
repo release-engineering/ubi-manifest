@@ -21,6 +21,9 @@ class UbiUnit:
         return str(self._unit)
 
     def isinstance_inner_unit(self, klass: Unit) -> bool:
+        """
+        Compares type of unit given to type of unit this UbiUnit was derived from.
+        """
         return isinstance(self._unit, klass)
 
     def __hash__(self) -> int:
@@ -36,6 +39,9 @@ class UbiUnit:
 
 @define
 class PackageToExclude:
+    """
+    Representation of a excluded/blacklisted package.
+    """
     name: str
     globbing: bool = False
     arch: Optional[str] = None
@@ -43,6 +49,9 @@ class PackageToExclude:
 
 @define
 class DepsolverItem:
+    """
+    Item for resolution by RPM depsolver.
+    """
     whitelist: set[str]
     blacklist: list[PackageToExclude]
     in_pulp_repos: list[YumRepository]
@@ -50,6 +59,9 @@ class DepsolverItem:
 
 @define
 class ModularDepsolverItem:
+    """
+    Item for resolution by modulemd depsolver.
+    """
     modulelist: list[Module]
     repo: YumRepository
     in_pulp_repos: list[YumRepository]

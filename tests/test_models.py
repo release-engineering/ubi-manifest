@@ -1,7 +1,7 @@
 import pytest
 from pubtools.pulplib import RpmUnit
 
-from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
+from ubi_manifest.worker.models import UbiUnit
 
 
 def test_ubi_unit():

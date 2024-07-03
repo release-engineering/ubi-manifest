@@ -10,7 +10,7 @@ from typing import Any, Optional
 from pubtools.pulplib import Client, Criteria, Matcher, RpmDependency
 from ubiconfig import UbiConfig
 
-from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
+from ubi_manifest.worker.models import PackageToExclude, UbiUnit
 
 _LOG = getLogger(__name__)
 
@@ -34,6 +34,9 @@ RELATION_CMP_MAP = {
 
 
 def make_pulp_client(config: dict[str, Any]) -> Client:
+    """
+    Create and return a Pulp client from given configuration.
+    """
     kwargs = {"verify": config.get("pulp_verify")}
     cert, key = config.get("pulp_cert"), config.get("pulp_key")
     # check cert/key for presence, if present assume cert/key for pulp auth
@@ -50,11 +53,13 @@ def make_pulp_client(config: dict[str, Any]) -> Client:
 def create_or_criteria(
     fields: list[str], values: list[tuple[Any, ...]]
 ) -> list[Criteria]:
-    # fields - list of fields [field1, field2]
-    # values - list of tuples [(field1 value, field2 value), ...]
-    # creates criteria for pulp query in a following way
-    # one tuple in values uses AND logic
-    # each criteria for one tuple are agregated by to or_criteria list
+    """
+    Creates a list of Pulp 'AND' criteria, joining inner criteria for given
+    fields and corresponding values.
+
+    fields - list of fields [field1, field2]
+    values - list of tuples [(field1 value, field2 value), ...]
+    """
     or_criteria: list[Criteria] = []
 
     for val_tuple in values:
@@ -70,6 +75,9 @@ def create_or_criteria(
 
 
 def flatten_list_of_sets(list_of_sets: list[set[Any]]) -> set[Any]:
+    """
+    Converts a list of sets into a single set.
+    """
     out = set()
     for one_set in list_of_sets:
         out |= one_set
@@ -78,6 +86,9 @@ def flatten_list_of_sets(list_of_sets: list[set[Any]]) -> set[Any]:
 
 
 def is_blacklisted(package: UbiUnit, blacklist: list[PackageToExclude]) -> bool:
+    """
+    Determines whether or not given package is blacklisted.
+    """
     for item in blacklist:
         if item.arch:
             if package.arch != item.arch:
@@ -97,6 +108,9 @@ def get_n_latest_from_content(
     blacklist: list[PackageToExclude],
     modular_rpms: Optional[set[str]] = None,
 ) -> list[UbiUnit]:
+    """
+    Filters modular, blacklisted, and outdated RPMs from given content.
+    """
     name_rpms_maps: dict[str, list[UbiUnit]] = {}
     for item in content:
         if modular_rpms:
@@ -118,7 +132,9 @@ def get_n_latest_from_content(
 
 
 def parse_bool_deps(bool_dependency: str) -> set[RpmDependency]:
-    """Parses boolean/rich dependency clause and returns set of names of packages"""
+    """
+    Parses boolean/rich dependency clause and returns set of names of packages.
+    """
     to_parse = bool_dependency.split()
 
     skip_next = False
@@ -153,7 +169,16 @@ def parse_bool_deps(bool_dependency: str) -> set[RpmDependency]:
 
 
 def vercmp_sort() -> Any:
+    """
+    Creates and returns a wrapper class enabling sorting/comparing UbiUnits
+    by epoc, version, release tuple (evr).
+    """
+
     class Klass:
+        """
+        Wrapper class for UbiUnits that enables sorting/comparing.
+        """
+
         def __init__(self, package: UbiUnit):
             self.evr_tuple = (package.epoch, package.version, package.release)
 
@@ -178,16 +203,19 @@ def vercmp_sort() -> Any:
     return Klass
 
 
-def is_requirement_resolved(requirement: RpmDependency, provider: RpmDependency) -> Any:
-    if requirement.flags:
-        req_evr = (requirement.epoch, requirement.version, requirement.release)
+def is_requirement_resolved(req: RpmDependency, provider: RpmDependency) -> Any:
+    """
+    Determines whether or not a given requirement has been resolved.
+    """
+    if req.flags:
+        req_evr = (req.epoch, req.version, req.release)
         prov_evr = (provider.epoch, provider.version, provider.release)
         # compare provider with requirement
-        out = RELATION_CMP_MAP[requirement.flags](prov_evr, req_evr)  # type: ignore [no-untyped-call]
+        out = RELATION_CMP_MAP[req.flags](prov_evr, req_evr)  # type: ignore [no-untyped-call]
 
     else:
         # without flags we just compare names
-        out = requirement.name == provider.name
+        out = req.name == provider.name
 
     return out
 
@@ -235,13 +263,12 @@ def keep_n_latest_rpms(rpms: list[UbiUnit], n: int = 1) -> None:
 # borrowed from https://github.com/rpm-software-management/yum
 def split_filename(filename: str) -> tuple[str, ...]:
     """
-    Pass in a standard style rpm fullname
+    Returns a name, version, release, epoch, arch tuple for a standard RPM fullname.
 
-    Return a name, version, release, epoch, arch, e.g.::
-        foo-1.0-1.i386.rpm returns foo, 1.0, 1, i386
-        1:bar-9-123a.ia64.rpm returns bar, 9, 123a, 1, ia64
+    E.g.;
+        foo-1.0-1.i386.rpm -> foo, 1.0, 1, i386
+        1:bar-9-123a.ia64.rpm -> bar, 9, 123a, 1, ia64
     """
-
     if filename[-4:] == ".rpm":
         filename = filename[:-4]
 
@@ -269,6 +296,11 @@ def split_filename(filename: str) -> tuple[str, ...]:
 def remap_keys(
     mapping: dict[str, str], dict_to_remap: dict[str, list[UbiUnit]]
 ) -> dict[str, list[UbiUnit]]:
+    """
+    Remaps given `dict_to_remap` according to `mapping` values.
+
+    E.g., mapping["A", "1"], dict_to_remap["A", list[...]] == output["1", list[...]]
+    """
     out: dict[str, list[UbiUnit]] = {}
     for k, v in dict_to_remap.items():
         new_key = mapping[k]
@@ -278,6 +310,9 @@ def remap_keys(
 
 
 def parse_blacklist_config(ubi_config: UbiConfig) -> list[PackageToExclude]:
+    """
+    Produces a list of `PackagesToExclude` based on given `UbiConfig`.
+    """
     packages_to_exclude = []
     for package_pattern in ubi_config.packages.blacklist:
         globbing = package_pattern.name.endswith("*")
@@ -294,7 +329,7 @@ def parse_blacklist_config(ubi_config: UbiConfig) -> list[PackageToExclude]:
 
 def keep_n_latest_modules(modules: list[UbiUnit], n: int = 1) -> None:
     """
-    Keeps n latest modules in modules sorted list
+    Keeps n latest modules in modules sorted list.
     """
     modules_to_keep = []
     versions_to_keep = sorted(set(m.version for m in modules))[-n:]

@@ -6,6 +6,7 @@ import pytest
 from pubtools.pulplib import Distributor, ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
 
 from ubi_manifest.worker.tasks import depsolve
+from ubi_manifest.worker.ubi_config import ContentConfigMissing
 
 from .utils import MockedRedis, MockLoader, create_and_insert_repo
 
@@ -173,7 +174,7 @@ def test_depsolve_task(pulp):
     pulp.insert_units(rhel_debug_repo, [unit_debuginfo, unit_debugsource])
     pulp.insert_units(rhel_source_repo, [unit_srpm, unit_srpm_debug])
 
-    with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
+    with mock.patch("ubi_manifest.worker.utils.Client") as client:
         with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
             with mock.patch(
                 "ubi_manifest.worker.tasks.depsolve.redis.from_url"
@@ -326,7 +327,7 @@ def test_depsolve_task_empty_manifests(pulp):
         id="rhel_source_repo", pulp=pulp, content_set="cs_srpm_in"
     )
 
-    with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
+    with mock.patch("ubi_manifest.worker.utils.Client") as client:
         with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
             with mock.patch(
                 "ubi_manifest.worker.tasks.depsolve.redis.from_url"
@@ -767,7 +768,7 @@ def test_multiple_population_sources(pulp):
     """
     _setup_data_multiple_population_sources(pulp)
 
-    with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
+    with mock.patch("ubi_manifest.worker.utils.Client") as client:
         with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
             with mock.patch(
                 "ubi_manifest.worker.tasks.depsolve.redis.from_url"
@@ -873,7 +874,7 @@ def test_missing_content_config(pulp):
     """Exception is raised where there is no matching ubi content config"""
     _setup_repos_missing_config(pulp)
 
-    with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
+    with mock.patch("ubi_manifest.worker.utils.Client") as client:
         with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
             with mock.patch(
                 "ubi_manifest.worker.tasks.depsolve.redis.from_url"
@@ -883,7 +884,7 @@ def test_missing_content_config(pulp):
 
                 client.return_value = pulp.client
                 # let run the depsolve task
-                with pytest.raises(depsolve.ContentConfigMissing):
+                with pytest.raises(ContentConfigMissing):
                     _ = depsolve.depsolve_task(["ubi_repo"], "fake-url")
 
 
@@ -963,7 +964,7 @@ def _setup_repos_missing_config(pulp):
 def test_multiple_population_sources_skip_depsolving(pulp):
     _setup_data_multiple_population_sources(pulp)
 
-    with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
+    with mock.patch("ubi_manifest.worker.utils.Client") as client:
         with mock.patch(
             "ubiconfig.get_loader",
             return_value=MockLoader(flags={"base_pkgs_only": True}),

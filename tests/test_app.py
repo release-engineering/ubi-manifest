@@ -133,7 +133,7 @@ def test_manifest_get_not_found(client):
 
 
 @mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@mock.patch("ubi_manifest.worker.utils.Client")
 @mock.patch("celery.app.task.Task.apply_async")
 def test_manifest_post_full_dep(
     mocked_apply_async, pulp_client, get_loader, client, pulp
@@ -196,7 +196,7 @@ def test_manifest_post_full_dep(
 
 
 @mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@mock.patch("ubi_manifest.worker.utils.Client")
 @mock.patch("celery.app.task.Task.apply_async")
 def test_manifest_post_not_full_dep(
     mocked_apply_async, pulp_client, get_loader, client, pulp
@@ -251,7 +251,7 @@ def test_manifest_post_not_full_dep(
 
 
 @mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@mock.patch("ubi_manifest.worker.utils.Client")
 @mock.patch("celery.app.task.Task.apply_async")
 def test_manifest_post_no_depsolve_items(
     mocked_apply_async, pulp_client, get_loader, client, pulp
@@ -287,7 +287,7 @@ def test_manifest_post_no_depsolve_items(
 
 
 @mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@mock.patch("ubi_manifest.worker.utils.Client")
 @mock.patch("celery.app.task.Task.apply_async")
 def test_manifest_post_more_repo_classes(
     mocked_apply_async, pulp_client, get_loader, client
@@ -314,7 +314,7 @@ def test_manifest_post_more_repo_classes(
 
 
 @mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@mock.patch("ubi_manifest.worker.utils.Client")
 @mock.patch("celery.app.task.Task.apply_async")
 def test_manifest_post_wrong_repo_ids(
     mocked_apply_async, pulp_client, get_loader, client
@@ -338,7 +338,7 @@ def test_manifest_post_wrong_repo_ids(
 
 
 @mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@mock.patch("ubi_manifest.worker.utils.Client")
 @mock.patch("celery.app.task.Task.apply_async")
 def test_manifest_post_no_repo_ids(mocked_apply_async, pulp_client, get_loader, client):
     """test request for depsolving for empty list of repo ids"""

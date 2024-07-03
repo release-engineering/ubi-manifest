@@ -4,7 +4,6 @@ Module for depsolving modulemds in ubi repositories
 
 from __future__ import annotations
 
-import logging
 import os
 from itertools import chain
 from typing import Any
@@ -13,11 +12,13 @@ from more_executors import Executors
 from more_executors.futures import f_proxy
 from pubtools.pulplib import ModulemdUnit, YumRepository
 
-from .models import ModularDepsolverItem, UbiUnit
-from .pulp_queries import search_modulemd_defaults, search_modulemds
-from .utils import get_criteria_for_modules, get_modulemd_output_set, split_filename
-
-_LOG = logging.getLogger(__name__)
+from ubi_manifest.worker.models import ModularDepsolverItem, UbiUnit
+from ubi_manifest.worker.pulp_queries import search_modulemd_defaults, search_modulemds
+from ubi_manifest.worker.utils import (
+    get_criteria_for_modules,
+    get_modulemd_output_set,
+    split_filename,
+)
 
 MAX_WORKERS = int(os.getenv("UBI_MANIFEST_MODULAR_DEPSOLVER_WORKERS", "8"))
 

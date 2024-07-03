@@ -23,7 +23,7 @@ def test_get_repo_classes(repo_ids, expected_result):
 
 
 @patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@patch("ubi_manifest.worker.tasks.depsolver.utils.Client")
+@patch("ubi_manifest.worker.utils.Client")
 def test_get_items_for_depsolving_default_groups(get_loader, pulp_client):
     app_conf = Mock(
         content_config={"ubi": "https://ubi", "client-tools": "https://ct"},
