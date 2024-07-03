@@ -1,9 +1,9 @@
 import base64
-from dataclasses import dataclass
 import json
 import logging
-
+from dataclasses import dataclass
 from unittest import mock
+
 import pytest
 from fastapi import HTTPException
 from starlette.datastructures import URL

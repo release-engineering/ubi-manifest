@@ -1,5 +1,6 @@
 import base64
 import json
+
 import pytest
 from fastapi.testclient import TestClient
 from pubtools.pulplib import FakeController

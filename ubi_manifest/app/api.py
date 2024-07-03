@@ -3,9 +3,9 @@ import json
 import redis
 from fastapi import APIRouter, HTTPException
 
+from ubi_manifest import auth
 from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.tasks.depsolve import depsolve_task
-from ubi_manifest import auth
 
 from .models import DepsolveItem, DepsolverResult, DepsolverResultItem, TaskState
 from .utils import get_items_for_depsolving, get_repo_classes

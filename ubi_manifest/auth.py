@@ -5,7 +5,6 @@ from typing import Any, Union
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
 
-
 _LOG = logging.getLogger(__name__)
 
 

@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 
 from ubi_manifest.app import api
+
 from ..auth import log_login
 
 
