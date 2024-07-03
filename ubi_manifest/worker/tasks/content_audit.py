@@ -69,7 +69,9 @@ def content_audit_task() -> None:
             in_repos = client.search_repository(
                 Criteria.with_id(out_repo.population_sources)
             )
-            in_mod_rpm_filenames = get_pkgs_from_all_modules(in_repos)
+            modular_rpm_filenames = get_pkgs_from_all_modules(
+                list(in_repos) + [out_repo]
+            )
 
             for in_repo in in_repos:
                 # get all corresponding units currently on input repo
@@ -119,12 +121,18 @@ def content_audit_task() -> None:
             # check that all content is up-to-date
             out_rpms_result = out_rpms.result()
             for in_rpm in _latest_input_rpms(in_rpms_fts):
-                if in_rpm.filename in in_mod_rpm_filenames:
+                if in_rpm.filename in modular_rpm_filenames:
                     _LOG.debug(
                         "[%s] Skipping modular RPM %s", out_repo.id, in_rpm.filename
                     )
+                    # record seen modular RPMs as modules since they may be in module whitelist
+                    seen_modules.add(f"{in_rpm.name}:{in_rpm.version}")
                     continue
                 for out_rpm in out_rpms_result.copy():
+                    if out_rpm.filename in modular_rpm_filenames:
+                        # skip modular RPMs from out_repo also
+                        out_rpms_result.discard(out_rpm)
+                        continue
                     if (out_rpm.name, out_rpm.arch) == (in_rpm.name, in_rpm.arch):
                         _compare_versions(out_repo.id, out_rpm, in_rpm)
                         seen_rpms.add(in_rpm)
