@@ -42,6 +42,7 @@ class PackageToExclude:
     """
     Representation of a excluded/blacklisted package.
     """
+
     name: str
     globbing: bool = False
     arch: Optional[str] = None
@@ -52,6 +53,7 @@ class DepsolverItem:
     """
     Item for resolution by RPM depsolver.
     """
+
     whitelist: set[str]
     blacklist: list[PackageToExclude]
     in_pulp_repos: list[YumRepository]
@@ -62,6 +64,7 @@ class ModularDepsolverItem:
     """
     Item for resolution by modulemd depsolver.
     """
+
     modulelist: list[Module]
     repo: YumRepository
     in_pulp_repos: list[YumRepository]
