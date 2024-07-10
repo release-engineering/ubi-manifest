@@ -44,7 +44,11 @@ class MockLoader:
                     {
                         "name": "fake_name",
                         "stream": "fake_stream",
-                    }
+                    },
+                    {  # This should not be reported as missing in content audit tests.
+                        "name": "bind",
+                        "stream": "12",
+                    },
                 ]
             },
             "packages": {
