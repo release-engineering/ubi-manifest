@@ -6,13 +6,12 @@ from typing import Any
 from more_executors.futures import f_proxy
 from pubtools.pulplib import Criteria, ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
 
+from ubi_manifest.worker.common import filter_whitelist, get_pkgs_from_all_modules
+from ubi_manifest.worker.models import PackageToExclude, UbiUnit
+from ubi_manifest.worker.pulp_queries import search_units
 from ubi_manifest.worker.tasks.celery import app
-from ubi_manifest.worker.tasks.depsolve import filter_whitelist, get_content_config
-from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
-from ubi_manifest.worker.tasks.depsolver.pulp_queries import search_units
-from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import get_pkgs_from_all_modules
-from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
-from ubi_manifest.worker.tasks.depsolver.utils import (
+from ubi_manifest.worker.ubi_config import UbiConfigLoader, get_content_config
+from ubi_manifest.worker.utils import (
     RELATION_CMP_MAP,
     create_or_criteria,
     get_criteria_for_modules,

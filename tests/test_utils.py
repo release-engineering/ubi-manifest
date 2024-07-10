@@ -10,9 +10,9 @@ from pubtools.pulplib import (
     RpmUnit,
 )
 
-from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude, UbiUnit
-from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
-from ubi_manifest.worker.tasks.depsolver.utils import (
+from ubi_manifest.worker.models import PackageToExclude, UbiUnit
+from ubi_manifest.worker.ubi_config import UbiConfigLoader
+from ubi_manifest.worker.utils import (
     create_or_criteria,
     flatten_list_of_sets,
     get_criteria_for_modules,

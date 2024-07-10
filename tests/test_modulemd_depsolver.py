@@ -10,7 +10,7 @@ from pubtools.pulplib import (
 )
 from ubiconfig.config_types.modules import Module
 
-from ubi_manifest.worker.tasks.depsolver.models import (
+from ubi_manifest.worker.models import (
     DepsolverItem,
     ModularDepsolverItem,
     PackageToExclude,

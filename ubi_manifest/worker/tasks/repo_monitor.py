@@ -6,7 +6,7 @@ from typing import Union
 from pubtools.pulplib import Criteria, Repository
 
 from ubi_manifest.worker.tasks.celery import app
-from ubi_manifest.worker.tasks.depsolver.utils import make_pulp_client
+from ubi_manifest.worker.utils import make_pulp_client
 
 _LOG = logging.getLogger(__name__)
 

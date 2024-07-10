@@ -3,17 +3,14 @@ from tempfile import NamedTemporaryFile
 from attrs import define
 from pubtools.pulplib import Client, ModulemdUnit, RpmUnit, YumRepository
 
-from ubi_manifest.worker.tasks.depsolver.models import UbiUnit
-from ubi_manifest.worker.tasks.depsolver.pulp_queries import (
+from ubi_manifest.worker.models import UbiUnit
+from ubi_manifest.worker.pulp_queries import (
     _search_units_per_repos,
     search_modulemds,
     search_rpms,
     search_units,
 )
-from ubi_manifest.worker.tasks.depsolver.utils import (
-    create_or_criteria,
-    make_pulp_client,
-)
+from ubi_manifest.worker.utils import create_or_criteria, make_pulp_client
 
 from .utils import create_and_insert_repo
 

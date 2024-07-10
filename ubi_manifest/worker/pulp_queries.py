@@ -13,8 +13,8 @@ from pubtools.pulplib import (
     YumRepository,
 )
 
-from .models import UbiUnit
-from .utils import flatten_list_of_sets
+from ubi_manifest.worker.models import UbiUnit
+from ubi_manifest.worker.utils import flatten_list_of_sets
 
 BATCH_SIZE = int(os.getenv("UBI_MANIFEST_BATCH_SIZE", "250"))
 
@@ -104,6 +104,9 @@ def search_modulemds(
     repos: list[YumRepository],
     batch_size_override: Optional[int] = None,
 ) -> Future[set[UbiUnit]]:
+    """
+    Execute a query for modulemd units matching given criteria.
+    """
     return _search_units_per_repos(
         or_criteria,
         repos,
@@ -117,6 +120,9 @@ def search_rpms(
     repos: list[YumRepository],
     batch_size_override: Optional[int] = None,
 ) -> Future[set[UbiUnit]]:
+    """
+    Execute a query for RPM units matching given criteria.
+    """
     return _search_units_per_repos(
         or_criteria,
         repos,
@@ -130,6 +136,9 @@ def search_modulemd_defaults(
     repos: list[YumRepository],
     batch_size_override: Optional[int] = None,
 ) -> Future[set[UbiUnit]]:
+    """
+    Execute a query for modulemd defaults units matching given criteria.
+    """
     return _search_units_per_repos(
         or_criteria,
         repos,

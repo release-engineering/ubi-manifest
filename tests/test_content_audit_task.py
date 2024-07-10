@@ -219,7 +219,7 @@ def test_content_audit_outdated(pulp, caplog):
         [rpm_1, rpm_2, module_1, module_2, default_1, default_2],
     )
 
-    with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
+    with mock.patch("ubi_manifest.worker.utils.Client") as client:
         with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
             client.return_value = pulp.client
 
@@ -288,7 +288,7 @@ def test_content_audit_blacklisted(pulp, caplog):
     pulp.insert_units(bad_repo, [blacklisted])
     pulp.insert_units(ubi_repo, [blacklisted])
 
-    with mock.patch("ubi_manifest.worker.tasks.depsolver.utils.Client") as client:
+    with mock.patch("ubi_manifest.worker.utils.Client") as client:
         with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
             client.return_value = pulp.client
 

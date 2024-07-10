@@ -8,13 +8,12 @@ from typing import Any
 
 from more_executors import Executors
 from more_executors.futures import f_proxy
-from pubtools.pulplib import Criteria, RpmDependency, YumRepository
+from pubtools.pulplib import RpmDependency, YumRepository
 
-from ubi_manifest.worker.tasks.depsolver.models import PackageToExclude
-
-from .models import DepsolverItem, UbiUnit
-from .pulp_queries import search_modulemds, search_rpms
-from .utils import (
+from ubi_manifest.worker.common import get_pkgs_from_all_modules
+from ubi_manifest.worker.models import DepsolverItem, PackageToExclude, UbiUnit
+from ubi_manifest.worker.pulp_queries import search_rpms
+from ubi_manifest.worker.utils import (
     create_or_criteria,
     get_n_latest_from_content,
     is_blacklisted,
@@ -33,23 +32,12 @@ BATCH_SIZE_RESOLVER = int(os.getenv("UBI_MANIFEST_BATCH_SIZE_RESOLVER", "150"))
 MAX_WORKERS = int(os.getenv("UBI_MANIFEST_DEPSOLVER_WORKERS", "8"))
 
 
-def get_pkgs_from_all_modules(repos: list[YumRepository]) -> set[str]:
-    """
-    Search for modulemds in all input repos and extract rpm filenames.
-    """
-
-    def extract_modular_filenames() -> set[str]:
-        filenames = set()
-        for module in modules:  # type: ignore [attr-defined]
-            filenames |= set(module.artifacts_filenames)
-
-        return filenames
-
-    modules = search_modulemds([Criteria.true()], repos)
-    return extract_modular_filenames()
-
-
 class Depsolver:
+    """
+    Depsolver executes the process of resolving dependencies of units in
+    the given repositories.
+    """
+
     def __init__(
         self,
         repos: list[DepsolverItem],
@@ -103,6 +91,9 @@ class Depsolver:
         pkgs_list: set[str],
         blacklist: list[PackageToExclude],
     ) -> list[UbiUnit]:
+        """
+        Query RPMs for given `pkg_list`, returning only latest versions of results.
+        """
         crit = create_or_criteria(["name"], [(rpm,) for rpm in pkgs_list])
 
         content = f_proxy(
@@ -192,6 +183,9 @@ class Depsolver:
     def resolve_files(
         self, repos: list[YumRepository], blacklist: list[PackageToExclude]
     ) -> list[UbiUnit]:
+        """
+        Resolves file dependencies.
+        """
         batch = []
         for _ in range(min(len(self._unsolved_files), BATCH_SIZE_RESOLVER)):
             batch.append(self._unsolved_files.pop())
@@ -200,6 +194,9 @@ class Depsolver:
     def resolve_rpms(
         self, repos: list[YumRepository], blacklist: list[PackageToExclude]
     ) -> list[UbiUnit]:
+        """
+        Resolves RPM dependencies.
+        """
         batch = []
         for _ in range(min(len(self._unsolved_rpms), BATCH_SIZE_RESOLVER)):
             batch.append(self._unsolved_rpms.pop())
@@ -245,7 +242,11 @@ class Depsolver:
         out = set()
         for content_ft in as_completed(content_fts):
             out.update(
-                {srpm for srpm in content_ft.result() if not is_blacklisted(srpm, blacklist)}  # type: ignore [attr-defined]
+                {
+                    srpm
+                    for srpm in content_ft.result()  # type: ignore [attr-defined]
+                    if not is_blacklisted(srpm, blacklist)
+                }
             )
 
         return out
@@ -268,7 +269,11 @@ class Depsolver:
         # Get modular rpms if they are not already populated from the previous run of the depsolver
         if not self._modular_rpm_filenames:
             self._modular_rpm_filenames.update(
-                f_proxy(self._executor.submit(get_pkgs_from_all_modules, pulp_repos))  # type: ignore [arg-type]
+                f_proxy(
+                    self._executor.submit(
+                        get_pkgs_from_all_modules, pulp_repos  # type: ignore [arg-type]
+                    )
+                )
             )
 
         merged_blacklist = list(
@@ -303,7 +308,7 @@ class Depsolver:
         self._log_missing_base_pkgs()
 
         to_resolve = set(self.output_set)
-        while True and not self._base_pkgs_only:
+        while not self._base_pkgs_only:
             # extract provides and requires
             self.extract_and_resolve(to_resolve)
             # we are finished if _unsolved_rpms/files are empty
@@ -333,6 +338,10 @@ class Depsolver:
                 self._log_warnings(deps_not_found, pulp_repos, merged_blacklist)
 
     def export(self) -> dict[str, list[UbiUnit]]:
+        """
+        Prepares output, deduplicating units while keeping identical RPMs from
+        different repositories.
+        """
         out: dict[str, list[UbiUnit]] = {}
         # set of unique tuples (filename, repo_id)
         filename_repo_tuples: set[tuple[str, str]] = set()
@@ -394,7 +403,8 @@ class Depsolver:
                 )
             else:
                 _LOG.warning(
-                    "Failed depsolving: %s can not be found in these input repos: %s. These rpms depend on it %s",
+                    "Failed depsolving: %s can not be found in these input repos: %s. "
+                    "These rpms depend on it %s",
                     item,
                     input_repos,
                     sorted(depending_rpms),

@@ -13,20 +13,13 @@ from pubtools.pulplib import (
     RpmUnit,
     YumRepository,
 )
-from ubiconfig import UbiConfig
 
+from ubi_manifest.worker.common import filter_whitelist
+from ubi_manifest.worker.models import DepsolverItem, ModularDepsolverItem, UbiUnit
 from ubi_manifest.worker.tasks.celery import app
-from ubi_manifest.worker.tasks.depsolver.models import (
-    DepsolverItem,
-    ModularDepsolverItem,
-    PackageToExclude,
-    UbiUnit,
-)
-from ubi_manifest.worker.tasks.depsolver.modulemd_depsolver import ModularDepsolver
-from ubi_manifest.worker.tasks.depsolver.rpm_depsolver import Depsolver
-from ubi_manifest.worker.tasks.depsolver.ubi_config import UbiConfigLoader
-from ubi_manifest.worker.tasks.depsolver.utils import (
-    is_blacklisted,
+from ubi_manifest.worker.tasks.depsolver import Depsolver, ModularDepsolver
+from ubi_manifest.worker.ubi_config import UbiConfigLoader, get_content_config
+from ubi_manifest.worker.utils import (
     make_pulp_client,
     parse_blacklist_config,
     remap_keys,
@@ -36,12 +29,11 @@ from ubi_manifest.worker.tasks.depsolver.utils import (
 _LOG = logging.getLogger(__name__)
 
 
-class ContentConfigMissing(Exception):
-    pass
-
-
 class InconsistentDepsolverConfig(Exception):
-    pass
+    """
+    Specific exception used when flags are inconsistent among repositories
+    processed by depsolve task.
+    """
 
 
 @app.task  # type: ignore [misc]  # ignore untyped decorator
@@ -247,25 +239,6 @@ def _save(data: dict[str, list[UbiUnit]]) -> None:
         )
 
 
-def filter_whitelist(
-    ubi_config: UbiConfig, blacklist: list[PackageToExclude]
-) -> tuple[set[str], set[str]]:
-    whitelist = set()
-    debuginfo_whitelist = set()
-
-    for pkg in ubi_config.packages.whitelist:
-        if pkg.arch == "src":
-            continue
-        if is_blacklisted(pkg, blacklist):
-            continue
-        if pkg.name.endswith("debuginfo") or pkg.name.endswith("debugsource"):
-            debuginfo_whitelist.add(pkg.name)
-        else:
-            whitelist.add(pkg.name)
-
-    return whitelist, debuginfo_whitelist
-
-
 def _get_population_sources(client: Client, repo: YumRepository) -> list[YumRepository]:
     return [client.get_repository(repo_id) for repo_id in repo.population_sources]
 
@@ -337,23 +310,6 @@ def _get_population_sources_per_cs(
         debug_sources[input_rpm_repo.content_set].append(input_debug_repo)
 
     return rpm_sources, debug_sources
-
-
-def get_content_config(
-    ubi_config_loader: UbiConfigLoader, input_cs: str, output_cs: str, version: str
-) -> UbiConfig:
-    out = None
-    # get proper ubi_config for given input and output content sets and a version
-    # fallback to default version if there is no match for requested config
-    for _ver in (version, version.split(".")[0]):
-        out = ubi_config_loader.get_config(input_cs, output_cs, _ver)
-        if out:
-            break
-
-    if out is None:
-        raise ContentConfigMissing
-
-    return out
 
 
 def validate_depsolver_flags(
