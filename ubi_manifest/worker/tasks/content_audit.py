@@ -74,6 +74,9 @@ def content_audit_task() -> None:
             )
 
             for in_repo in in_repos:
+                _LOG.debug(
+                    "[%s] processing input repository '%s'", out_repo.id, in_repo.id
+                )
                 # get all corresponding units currently on input repo
                 in_rpms_fts.append(
                     search_units(
@@ -119,6 +122,7 @@ def content_audit_task() -> None:
                     }
 
             # check that all content is up-to-date
+            _LOG.debug("[%s] processing input RPMs", out_repo.id)
             out_rpms_result = out_rpms.result()
             for in_rpm in _latest_input_rpms(in_rpms_fts):
                 if in_rpm.filename in modular_rpm_filenames:
@@ -138,6 +142,7 @@ def content_audit_task() -> None:
                         seen_rpms.add(in_rpm)
                         out_rpms_result.discard(out_rpm)
                         break
+            _LOG.debug("[%s] processing input modules", out_repo.id)
             out_mds_result = out_mds.result()
             for in_md in _latest_input_mds(in_mds_fts):
                 for out_md in out_mds_result.copy():
@@ -146,6 +151,7 @@ def content_audit_task() -> None:
                         seen_modules.add(f"{in_md.name}:{in_md.stream}")
                         out_mds_result.discard(out_md)
                         break
+            _LOG.debug("[%s] processing input module defaults", out_repo.id)
             out_mdds_result = out_mdds.result()
             for in_mdd in _latest_input_mdds(in_mdds_fts):
                 for out_mdd in out_mdds_result.copy():
@@ -166,6 +172,11 @@ def content_audit_task() -> None:
 
             # check seen RPMs and Modules off of whitelist
             to_check = {u.name for u in seen_rpms} | seen_modules
+            _LOG.debug(
+                "[%s] checking following seen units against whitelist;\n\t%s",
+                out_repo.id,
+                "\n\t".join(to_check),
+            )
             for pattern in output_whitelist.copy():
                 if matches := {name for name in to_check if pattern in name}:
                     output_whitelist.remove(pattern)
@@ -224,6 +235,14 @@ def _compare_versions(repo_id: str, out_unit: UbiUnit, in_unit: UbiUnit) -> None
     Compares RpmUnits and ModulemdUnits by version and ModulemdDefaultsUnits by
     profile equality, logging a warning if input is more recent than output.
     """
+
+    _LOG.debug(
+        "[%s] comparing %s '%s' and '%s'",
+        repo_id,
+        out_unit.content_type_id,
+        out_unit.name,
+        in_unit.name,
+    )
 
     def log_warning(warn_tuple: tuple[str, Any, Any]) -> None:
         _LOG.warning(

@@ -235,8 +235,8 @@ def test_content_audit_outdated(pulp, caplog):
             # we didn't add RPM 'pkg-debuginfo'
             "[outdated_ubi_repo] whitelisted content missing from UBI and/or population sources;\n\tpkg-debuginfo",
         ]
-        for real_msg, expected_msg in zip(sorted(caplog.messages), expected_logs):
-            assert expected_msg in real_msg
+        for msg in expected_logs:
+            assert msg in caplog.text
 
 
 def test_content_audit_blacklisted(pulp, caplog):
