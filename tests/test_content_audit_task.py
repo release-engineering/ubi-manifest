@@ -83,8 +83,8 @@ def _setup_population_sources(pulp):
     rpm_5 = RpmUnit(name="pkg-debuginfo.foo", version="1", release="2", arch="x86_64")
     rpm_6 = RpmUnit(name="package-name-abc", version="1", release="2", arch="x86_64")
     module_1 = ModulemdUnit(
-        name="fake_name",
-        stream="fake_stream",
+        name="fake_module",
+        stream="1",
         version=10,
         context="b7fad3bf",
         arch="x86_64",
@@ -97,7 +97,7 @@ def _setup_population_sources(pulp):
     )
     module_2 = ModulemdUnit(
         name="some_module1",
-        stream="fake_stream",
+        stream="1",
         version=10,
         context="b7fad3bf",
         arch="x86_64",
@@ -106,20 +106,31 @@ def _setup_population_sources(pulp):
             "test-1:1.24-3.module+el8.1.0+2934+dec45db7.src",
         ],
     )
+    module_3 = ModulemdUnit(
+        name="fake_module",
+        stream="3",
+        version=10,
+        context="b7fad3bf",
+        arch="x86_64",
+        artifacts=[
+            "test-0:4.6-2.module+el8.1.0+2934+dec45db7.noarch",
+            "test-0:4.6-2.module+el8.1.0+2934+dec45db7.src",
+        ],
+    )
     default_1 = ModulemdDefaultsUnit(
         name="some_module_defaults1",
-        stream="fake_stream",
+        stream="1",
         repo_id="ubi_repo",
         profiles={"1.1": ["default"], "1.0": []},
     )
     default_2 = ModulemdDefaultsUnit(
         name="some_module_defaults2",
-        stream="fake_stream",
+        stream="1",
         repo_id="ubi_repo",
         profiles={"1.0": ["default"]},
     )
 
-    pulp.insert_units(rhel_repo_1, [rpm_1, rpm_3, rpm_5, module_1, default_1])
+    pulp.insert_units(rhel_repo_1, [rpm_1, rpm_3, rpm_5, module_1, module_3, default_1])
     pulp.insert_units(rhel_repo_2, [rpm_2, rpm_4, rpm_6, module_2, default_2])
     pulp.insert_units(
         ubi_repo,
@@ -132,6 +143,7 @@ def _setup_population_sources(pulp):
             rpm_6,
             module_1,
             module_2,
+            module_3,
             default_1,
             default_2,
         ],
@@ -179,8 +191,8 @@ def test_content_audit_outdated(pulp, caplog):
         filename="bind-10.200.x86_64.rpm",
     )
     module_1 = ModulemdUnit(
-        name="fake_name",
-        stream="fake_stream",
+        name="fake_module",
+        stream="1",
         version=10,
         context="b7fad3bf",
         arch="x86_64",
@@ -193,7 +205,7 @@ def test_content_audit_outdated(pulp, caplog):
     )
     module_2 = ModulemdUnit(
         name="some_module1",
-        stream="fake_stream",
+        stream="1",
         version=7,  # outdated
         context="b7fad3bf",
         arch="x86_64",
@@ -202,21 +214,32 @@ def test_content_audit_outdated(pulp, caplog):
             "test-0:5.module+el8.1.0+2934+dec45db7.src",
         ],
     )
+    module_3 = ModulemdUnit(
+        name="fake_module",
+        stream="3",
+        version=10,
+        context="b7fad3bf",
+        arch="x86_64",
+        artifacts=[
+            "test-0:4.6-2.module+el8.1.0+2934+dec45db7.noarch",
+            "test-0:4.6-2.module+el8.1.0+2934+dec45db7.src",
+        ],
+    )
     default_1 = ModulemdDefaultsUnit(
         name="some_module_defaults1",
-        stream="fake_stream",
+        stream="1",
         repo_id="outdated_ubi_repo",
         profiles={"1.0": ["default"]},  # outdated
     )
     default_2 = ModulemdDefaultsUnit(
         name="some_module_defaults2",
-        stream="fake_stream",
+        stream="1",
         repo_id="outdated_ubi_repo",
         profiles={"1.0": ["default"]},
     )
     pulp.insert_units(
         ubi_repo,
-        [rpm_1, rpm_2, module_1, module_2, default_1, default_2],
+        [rpm_1, rpm_2, module_1, module_2, module_3, default_1, default_2],
     )
 
     with mock.patch("ubi_manifest.worker.utils.Client") as client:
@@ -229,8 +252,8 @@ def test_content_audit_outdated(pulp, caplog):
         # should have logged warnings
         expected_logs = [
             "[outdated_ubi_repo] Skipping modular RPM bind-12-2.module+el8+2248+23d5e2f2.noarch.rpm",
-            "[outdated_ubi_repo] UBI modulemd 'some_module1:fake_stream' version is outdated (current: 7, latest: 10)",
-            "[outdated_ubi_repo] UBI modulemd_defaults 'some_module_defaults1:fake_stream' version is outdated",
+            "[outdated_ubi_repo] UBI modulemd 'some_module1:1' version is outdated (current: 7, latest: 10)",
+            "[outdated_ubi_repo] UBI modulemd_defaults 'some_module_defaults1:1' version is outdated",
             "[outdated_ubi_repo] UBI rpm 'gcc' version is outdated (current: ('0', '8.2.1', '200'), latest: ('0', '9.0.1', '200'))",
             # we didn't add RPM 'pkg-debuginfo'
             "[outdated_ubi_repo] whitelisted content missing from UBI and/or population sources;\n\tpkg-debuginfo",
