@@ -20,7 +20,11 @@ def filter_whitelist(
             continue
         if is_blacklisted(pkg, blacklist):
             continue
-        if pkg.name.endswith("debuginfo") or pkg.name.endswith("debugsource"):
+        if (
+            pkg.name.endswith("debuginfo")
+            or pkg.name.endswith("debugsource")
+            or pkg.name.endswith("debuginfo-common")
+        ):
             debuginfo_whitelist.add(pkg.name)
         else:
             whitelist.add(pkg.name)
