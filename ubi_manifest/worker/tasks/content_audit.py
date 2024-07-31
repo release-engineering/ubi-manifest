@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 from concurrent.futures import Future, as_completed
+from itertools import chain
 from typing import Any
 
 from more_executors.futures import f_proxy
@@ -146,7 +147,9 @@ def content_audit_task() -> None:
                         out_mds_result.discard(out_md)
                         break
             out_mdds_result = out_mdds.result()
-            for in_mdd in _latest_input_mdds(in_mdds_fts):
+            for in_mdd in chain.from_iterable(
+                ft.result() for ft in as_completed(in_mdds_fts)
+            ):
                 for out_mdd in out_mdds_result.copy():
                     if out_mdd.name == in_mdd.name:
                         _compare_versions(out_repo.id, out_mdd, in_mdd)
@@ -220,20 +223,6 @@ def _latest_input_mds(fts: list[Future[set[UbiUnit]]]) -> list[UbiUnit]:
         latest_mds.extend(module_group)
 
     return latest_mds
-
-
-def _latest_input_mdds(fts: list[Future[set[UbiUnit]]]) -> list[UbiUnit]:
-    latest_mdds = []
-    md_defaults_map = defaultdict(list)
-
-    for ft in as_completed(fts):
-        for mdd in ft.result():
-            md_defaults_map[f"{mdd.name}:{mdd.stream}"].append(mdd)
-    for mdd_group in md_defaults_map.values():
-        group_latest = sorted(mdd_group, key=lambda x: x.profiles.keys())[-1:]
-        latest_mdds.extend(group_latest)
-
-    return latest_mdds
 
 
 def _compare_versions(repo_id: str, out_unit: UbiUnit, in_unit: UbiUnit) -> None:
