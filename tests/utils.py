@@ -42,8 +42,12 @@ class MockLoader:
             "modules": {
                 "include": [
                     {
-                        "name": "fake_name",
-                        "stream": "fake_stream",
+                        "name": "fake_module",
+                        "stream": "1",
+                    },
+                    {  # content audit should permit multiple same modules with different streams
+                        "name": "fake_module",
+                        "stream": "3",
                     },
                     {  # This should not be reported as missing in content audit tests.
                         "name": "bind",

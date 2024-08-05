@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 from concurrent.futures import Future, as_completed
+from itertools import chain
 from typing import Any
 
 from more_executors.futures import f_proxy
@@ -16,7 +17,6 @@ from ubi_manifest.worker.utils import (
     create_or_criteria,
     get_criteria_for_modules,
     is_blacklisted,
-    keep_n_latest_modulemd_defaults,
     keep_n_latest_modules,
     keep_n_latest_rpms,
     make_pulp_client,
@@ -74,9 +74,6 @@ def content_audit_task() -> None:
             )
 
             for in_repo in in_repos:
-                _LOG.debug(
-                    "[%s] processing input repository '%s'", out_repo.id, in_repo.id
-                )
                 # get all corresponding units currently on input repo
                 in_rpms_fts.append(
                     search_units(
@@ -122,7 +119,6 @@ def content_audit_task() -> None:
                     }
 
             # check that all content is up-to-date
-            _LOG.debug("[%s] processing input RPMs", out_repo.id)
             out_rpms_result = out_rpms.result()
             for in_rpm in _latest_input_rpms(in_rpms_fts):
                 if in_rpm.filename in modular_rpm_filenames:
@@ -142,7 +138,6 @@ def content_audit_task() -> None:
                         seen_rpms.add(in_rpm)
                         out_rpms_result.discard(out_rpm)
                         break
-            _LOG.debug("[%s] processing input modules", out_repo.id)
             out_mds_result = out_mds.result()
             for in_md in _latest_input_mds(in_mds_fts):
                 for out_md in out_mds_result.copy():
@@ -151,9 +146,10 @@ def content_audit_task() -> None:
                         seen_modules.add(f"{in_md.name}:{in_md.stream}")
                         out_mds_result.discard(out_md)
                         break
-            _LOG.debug("[%s] processing input module defaults", out_repo.id)
             out_mdds_result = out_mdds.result()
-            for in_mdd in _latest_input_mdds(in_mdds_fts):
+            for in_mdd in chain.from_iterable(
+                ft.result() for ft in as_completed(in_mdds_fts)
+            ):
                 for out_mdd in out_mdds_result.copy():
                     if out_mdd.name == in_mdd.name:
                         _compare_versions(out_repo.id, out_mdd, in_mdd)
@@ -215,19 +211,18 @@ def _latest_input_rpms(fts: list[Future[set[UbiUnit]]]) -> list[UbiUnit]:
 
 
 def _latest_input_mds(fts: list[Future[set[UbiUnit]]]) -> list[UbiUnit]:
-    out = []
-    for ft in as_completed(fts):
-        out.extend(list(ft.result()))
-    keep_n_latest_modules(out)
-    return out
+    latest_mds = []
+    module_map = defaultdict(list)
 
-
-def _latest_input_mdds(fts: list[Future[set[UbiUnit]]]) -> list[UbiUnit]:
-    out = []
     for ft in as_completed(fts):
-        out.extend(list(ft.result()))
-    keep_n_latest_modulemd_defaults(out)
-    return out
+        for md in ft.result():
+            module_map[f"{md.name}:{md.stream}"].append(md)
+    for module_group in module_map.values():
+        module_group.sort(key=lambda module: module.version)
+        keep_n_latest_modules(module_group)
+        latest_mds.extend(module_group)
+
+    return latest_mds
 
 
 def _compare_versions(repo_id: str, out_unit: UbiUnit, in_unit: UbiUnit) -> None:
@@ -235,14 +230,6 @@ def _compare_versions(repo_id: str, out_unit: UbiUnit, in_unit: UbiUnit) -> None
     Compares RpmUnits and ModulemdUnits by version and ModulemdDefaultsUnits by
     profile equality, logging a warning if input is more recent than output.
     """
-
-    _LOG.debug(
-        "[%s] comparing %s '%s' and '%s'",
-        repo_id,
-        out_unit.content_type_id,
-        out_unit.name,
-        in_unit.name,
-    )
 
     def log_warning(warn_tuple: tuple[str, Any, Any]) -> None:
         _LOG.warning(

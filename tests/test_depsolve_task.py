@@ -154,8 +154,8 @@ def test_depsolve_task(pulp):
         content_type_id="srpm",
     )
     unit_modulemd = ModulemdUnit(
-        name="fake_name",
-        stream="fake_stream",
+        name="fake_module",
+        stream="1",
         version=8,
         context="b7fad3bf",
         arch="x86_64",
@@ -166,7 +166,7 @@ def test_depsolve_task(pulp):
     )
 
     unit_modulemd_default = ModulemdDefaultsUnit(
-        name="fake_name", stream="fake_stream", repo_id="rhel_repo"
+        name="fake_module", stream="1", repo_id="rhel_repo"
     )
 
     pulp.insert_units(rhel_repo, [unit_binary, unit_modulemd, unit_modulemd_default])
@@ -198,18 +198,19 @@ def test_depsolve_task(pulp):
                 # load json string stored in redis
                 data = redis.get("ubi_repo")
                 content = json.loads(data)
+                print(content)
                 # binary repo contains only one rpm
                 assert len(content) == 3
                 unit = content[0]
                 assert unit["src_repo_id"] == "rhel_repo"
                 assert unit["unit_type"] == "ModulemdUnit"
                 assert unit["unit_attr"] == "nsvca"
-                assert unit["value"] == "fake_name:fake_stream:8:b7fad3bf:x86_64"
+                assert unit["value"] == "fake_module:1:8:b7fad3bf:x86_64"
                 unit = content[1]
                 assert unit["src_repo_id"] == "rhel_repo"
                 assert unit["unit_type"] == "ModulemdDefaultsUnit"
                 assert unit["unit_attr"] == "name:stream"
-                assert unit["value"] == "fake_name:fake_stream"
+                assert unit["value"] == "fake_module:1"
                 unit = content[2]
                 assert unit["src_repo_id"] == "rhel_repo"
                 assert unit["unit_type"] == "RpmUnit"

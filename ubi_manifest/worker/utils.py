@@ -388,25 +388,3 @@ def get_criteria_for_modules(modules: list[UbiUnit]) -> list[Criteria]:
     fields = ["name", "stream"]
     or_criteria = create_or_criteria(fields, criteria_values)
     return or_criteria
-
-
-def keep_n_latest_modulemd_defaults(
-    modulemd_defaults: list[UbiUnit], n: int = 1
-) -> None:
-    """
-    Keeps n latest modulemd_defaults units, determined by greatest key in profiles.
-    """
-
-    # group defaults units in lists mapped to name+stream
-    mdd_map = defaultdict(list)
-    for mdd in modulemd_defaults:
-        mdd_map[mdd.name + mdd.stream].append(mdd)
-
-    # get the 'latest' unit belonging to each name+stream
-    module_defaults_to_keep = []
-    for mdd_list in mdd_map.values():
-        module_defaults_to_keep.extend(
-            sorted(mdd_list, key=lambda x: x.profiles.keys())[-n:]
-        )
-
-    modulemd_defaults[:] = module_defaults_to_keep
