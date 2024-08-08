@@ -255,7 +255,6 @@ def test_content_audit_outdated(pulp, caplog):
             "[outdated_ubi_repo] UBI modulemd 'some_module1:1' version is outdated (current: 7, latest: 10)",
             "[outdated_ubi_repo] UBI modulemd_defaults 'some_module_defaults1:1' version is outdated",
             "[outdated_ubi_repo] UBI rpm 'gcc' version is outdated (current: ('0', '8.2.1', '200'), latest: ('0', '9.0.1', '200'))",
-            # we didn't add RPM 'pkg-debuginfo'
             "[outdated_ubi_repo] whitelisted content missing from UBI and/or population sources;\n\tpkg-debuginfo",
         ]
         for msg in expected_logs:

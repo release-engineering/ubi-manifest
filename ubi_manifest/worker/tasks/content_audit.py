@@ -42,20 +42,24 @@ def content_audit_task() -> None:
         for out_repo in client.search_repository(
             Criteria.with_field("ubi_population", True)
         ):
+            # we can skip modulemd/modulemd_defaults bits for debug or source repos
+            has_modules = all(s not in out_repo.id for s in ("debug", "source"))
+
             # get all relevant units currently on output repo
             out_rpms = f_proxy(
                 search_units(
                     out_repo, [Criteria.true()], RpmUnit, unit_fields=RPM_FIELDS
                 )
             )
-            out_mds = f_proxy(
-                search_units(
-                    out_repo, [Criteria.true()], ModulemdUnit, unit_fields=MD_FIELDS
+            if has_modules:
+                out_mds = f_proxy(
+                    search_units(
+                        out_repo, [Criteria.true()], ModulemdUnit, unit_fields=MD_FIELDS
+                    )
                 )
-            )
-            out_mdds = f_proxy(
-                search_units(out_repo, [Criteria.true()], ModulemdDefaultsUnit)
-            )
+                out_mdds = f_proxy(
+                    search_units(out_repo, [Criteria.true()], ModulemdDefaultsUnit)
+                )
 
             seen_rpms: set[UbiUnit] = set()
             seen_modules: set[str] = set()
@@ -69,9 +73,10 @@ def content_audit_task() -> None:
             in_repos = client.search_repository(
                 Criteria.with_id(out_repo.population_sources)
             )
-            modular_rpm_filenames = get_pkgs_from_all_modules(
-                list(in_repos) + [out_repo]
-            )
+            if has_modules:
+                modular_rpm_filenames = get_pkgs_from_all_modules(
+                    list(in_repos) + [out_repo]
+                )
 
             for in_repo in in_repos:
                 # get all corresponding units currently on input repo
@@ -84,22 +89,23 @@ def content_audit_task() -> None:
                         RPM_FIELDS,
                     )
                 )
-                in_mds_fts.append(
-                    search_units(
-                        in_repo,
-                        get_criteria_for_modules(out_mds),  # type: ignore [arg-type]
-                        ModulemdUnit,
-                        None,
-                        MD_FIELDS,
+                if has_modules:
+                    in_mds_fts.append(
+                        search_units(
+                            in_repo,
+                            get_criteria_for_modules(out_mds),  # type: ignore [arg-type]
+                            ModulemdUnit,
+                            None,
+                            MD_FIELDS,
+                        )
                     )
-                )
-                in_mdds_fts.append(
-                    search_units(
-                        in_repo,
-                        get_criteria_for_modules(out_mdds),  # type: ignore [arg-type]
-                        ModulemdDefaultsUnit,
+                    in_mdds_fts.append(
+                        search_units(
+                            in_repo,
+                            get_criteria_for_modules(out_mdds),  # type: ignore [arg-type]
+                            ModulemdDefaultsUnit,
+                        )
                     )
-                )
 
                 # accumulate input repo white/blacklists
                 for loader in config_loaders:
@@ -110,18 +116,19 @@ def content_audit_task() -> None:
                         out_repo.ubi_config_version,
                     )
                     output_blacklist.extend(parse_blacklist_config(config))
-                    whitelist, debuginfo_whitelist = filter_whitelist(
+                    pkg_whitelist, debuginfo_whitelist = filter_whitelist(
                         config, output_blacklist
                     )
-                    output_whitelist |= whitelist | debuginfo_whitelist
-                    output_whitelist |= {
-                        f"{md.name}:{md.stream}" for md in config.modules.whitelist
-                    }
+                    output_whitelist |= pkg_whitelist | debuginfo_whitelist
+                    if has_modules:
+                        output_whitelist |= {
+                            f"{md.name}:{md.stream}" for md in config.modules.whitelist
+                        }
 
             # check that all content is up-to-date
             out_rpms_result = out_rpms.result()
             for in_rpm in _latest_input_rpms(in_rpms_fts):
-                if in_rpm.filename in modular_rpm_filenames:
+                if has_modules and in_rpm.filename in modular_rpm_filenames:
                     _LOG.debug(
                         "[%s] Skipping modular RPM %s", out_repo.id, in_rpm.filename
                     )
@@ -138,23 +145,24 @@ def content_audit_task() -> None:
                         seen_rpms.add(in_rpm)
                         out_rpms_result.discard(out_rpm)
                         break
-            out_mds_result = out_mds.result()
-            for in_md in _latest_input_mds(in_mds_fts):
-                for out_md in out_mds_result.copy():
-                    if (out_md.name, out_md.stream) == (in_md.name, in_md.stream):
-                        _compare_versions(out_repo.id, out_md, in_md)
-                        seen_modules.add(f"{in_md.name}:{in_md.stream}")
-                        out_mds_result.discard(out_md)
-                        break
-            out_mdds_result = out_mdds.result()
-            for in_mdd in chain.from_iterable(
-                ft.result() for ft in as_completed(in_mdds_fts)
-            ):
-                for out_mdd in out_mdds_result.copy():
-                    if out_mdd.name == in_mdd.name:
-                        _compare_versions(out_repo.id, out_mdd, in_mdd)
-                        out_mdds_result.discard(out_mdd)
-                        break
+            if has_modules:
+                out_mds_result = out_mds.result()
+                for in_md in _latest_input_mds(in_mds_fts):
+                    for out_md in out_mds_result.copy():
+                        if (out_md.name, out_md.stream) == (in_md.name, in_md.stream):
+                            _compare_versions(out_repo.id, out_md, in_md)
+                            seen_modules.add(f"{in_md.name}:{in_md.stream}")
+                            out_mds_result.discard(out_md)
+                            break
+                out_mdds_result = out_mdds.result()
+                for in_mdd in chain.from_iterable(
+                    ft.result() for ft in as_completed(in_mdds_fts)
+                ):
+                    for out_mdd in out_mdds_result.copy():
+                        if out_mdd.name == in_mdd.name:
+                            _compare_versions(out_repo.id, out_mdd, in_mdd)
+                            out_mdds_result.discard(out_mdd)
+                            break
 
             # check seen RPMs against blacklist
             if blacklisted := {
