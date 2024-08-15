@@ -119,7 +119,9 @@ def content_audit_task() -> None:
                     pkg_whitelist, debuginfo_whitelist = filter_whitelist(
                         config, output_blacklist
                     )
-                    output_whitelist |= pkg_whitelist | debuginfo_whitelist
+                    output_whitelist |= pkg_whitelist
+                    if "debug" in out_repo.id:
+                        output_whitelist |= debuginfo_whitelist
                     if has_modules:
                         output_whitelist |= {
                             f"{md.name}:{md.stream}" for md in config.modules.whitelist
