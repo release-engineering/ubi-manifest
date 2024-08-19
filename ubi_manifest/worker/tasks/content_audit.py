@@ -138,7 +138,7 @@ def content_audit_task() -> None:
                     seen_modules.add(f"{in_rpm.name}:{in_rpm.version}")
                     continue
                 for out_rpm in out_rpms_result.copy():
-                    if out_rpm.filename in modular_rpm_filenames:
+                    if has_modules and out_rpm.filename in modular_rpm_filenames:
                         # skip modular RPMs from out_repo also
                         out_rpms_result.discard(out_rpm)
                         continue
