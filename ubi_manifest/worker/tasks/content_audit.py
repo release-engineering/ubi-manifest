@@ -131,7 +131,7 @@ def content_audit_task() -> None:
             out_rpms_result = out_rpms.result()
             for in_rpm in _latest_input_rpms(in_rpms_fts):
                 if has_modules and in_rpm.filename in modular_rpm_filenames:
-                    _LOG.debug(
+                    _LOG.info(
                         "[%s] Skipping modular RPM %s", out_repo.id, in_rpm.filename
                     )
                     # record seen modular RPMs as modules since they may be in module whitelist
@@ -178,7 +178,7 @@ def content_audit_task() -> None:
 
             # check seen RPMs and Modules off of whitelist
             to_check = {u.name for u in seen_rpms} | seen_modules
-            _LOG.debug(
+            _LOG.info(
                 "[%s] checking following seen units against whitelist;\n\t%s",
                 out_repo.id,
                 "\n\t".join(to_check),
