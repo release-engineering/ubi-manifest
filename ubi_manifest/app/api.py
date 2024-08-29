@@ -1,21 +1,147 @@
 import json
+from datetime import datetime, timedelta
 
 import redis
+import requests
 from fastapi import APIRouter, HTTPException
 
 from ubi_manifest import auth
 from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.tasks.depsolve import depsolve_task
 
-from .models import DepsolveItem, DepsolverResult, DepsolverResultItem, TaskState
-from .utils import get_items_for_depsolving, get_repo_classes
+from .models import (
+    DepsolveItem,
+    DepsolverResult,
+    DepsolverResultItem,
+    TaskState,
+    StatusResult,
+)
+from .utils import (
+    get_items_for_depsolving,
+    get_repo_classes,
+    get_gitlab_base_url,
+)
+
+
+REQUEST_TIMEOUT = 20
 
 router = APIRouter(prefix="/api/v1")
 
 
-@router.get("/status")
-def status() -> dict[str, str]:
-    return {"status": "OK"}
+@router.get(
+    "/status",
+    response_model=StatusResult,
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "server_status": "OK",
+                        "workers_status": {
+                            "availability": {"worker01": {"ok": "pong"}},
+                            "stats": {"worker01": {"some": "stats"}},
+                            "registered_tasks": {"worker01": ["some_task"]},
+                            "active_tasks": {"worker01": []},
+                            "scheduled_tasks": {"worker01": []},
+                        },
+                        "redis_status": {"status": "OK", "msg": "Redis is available."},
+                        "celery_beat_status": {
+                            "status": "OK",
+                            "msg": "Celery beat operable.",
+                        },
+                        "connection_to_gitlab": {
+                            "status": "OK",
+                            "msg": "Gitlab available.",
+                        },
+                        "connection_to_pulp": {
+                            "status": "OK",
+                            "msg": "Pulp available.",
+                        },
+                    }
+                }
+            },
+        }
+    },
+)
+def status() -> StatusResult:
+    # Check workers
+    # All calls return None if no workers are available - no exception handling needed
+    i = app.control.inspect()
+    workers_status = {
+        "availability": i.ping(),
+        "stats": i.stats(),
+        "registered_tasks": i.registered(),
+        "active_tasks": i.active(),
+        "scheduled_tasks": i.scheduled(),
+    }
+
+    # Check redis
+    redis_client = redis.from_url(app.conf.result_backend)
+    try:
+        redis_client.ping()
+        redis_status = {"status": "OK", "msg": "Redis is available."}
+    except Exception as ex:  # pylint: disable=broad-except
+        redis_status = {"status": "Failed", "msg": str(ex)}
+
+    # Check celery beat
+    heartbeat = redis_client.get("celery-beat-heartbeat")
+    if heartbeat:
+        last_heartbeat = datetime.fromisoformat(heartbeat.decode("utf-8"))
+        now = datetime.now()
+        time_from_last_heartbeat = now - last_heartbeat
+        if time_from_last_heartbeat < timedelta(minutes=2):
+            celery_beat_status = {"status": "OK", "msg": "Celery beat operable."}
+        else:
+            days = time_from_last_heartbeat.days
+            hours = time_from_last_heartbeat.seconds // 3600
+            minutes = (time_from_last_heartbeat.seconds - hours * 3600) // 60
+            celery_beat_status = {
+                "status": "Failed",
+                "msg": f"Last heartbeat task ran {days} days, {hours} hours "
+                f"and {minutes} minutes ago.",
+            }
+    else:
+        celery_beat_status = {
+            "status": "n/a",
+            "msg": "No heartbeat task ran yet. Wait a minute.",
+        }
+
+    # Gitlab is used only if the content configs are loaded from Gitlab.
+    # In case the configs are loaded from directory, connection to Gitlab
+    # is not needed, therefore not checked.
+    gitlab_base_url = get_gitlab_base_url(app.conf.content_config)
+    if gitlab_base_url:
+        try:
+            gitlab_resp = requests.get(
+                f"{gitlab_base_url}/-/health",
+                timeout=REQUEST_TIMEOUT,
+            )
+            gitlab_status = {"status": gitlab_resp.reason, "msg": "Gitlab available."}
+            gitlab_resp.raise_for_status()
+        except Exception as ex:  # pylint: disable=broad-except
+            gitlab_status = {"status": gitlab_resp.reason, "msg": str(ex)}
+    else:
+        gitlab_status = {"status": "n/a", "msg": "Gitlab is not needed."}
+
+    # Check connection to Pulp
+    try:
+        pulp_resp = requests.get(
+            f"{app.conf.pulp_url}/pulp/api/v2/status", timeout=REQUEST_TIMEOUT
+        )
+        pulp_status = {"status": pulp_resp.reason, "msg": "Pulp available."}
+        pulp_resp.raise_for_status()
+    except Exception as ex:  # pylint: disable=broad-except
+        pulp_status = {"status": pulp_resp.reason, "msg": str(ex)}
+
+    status_result = StatusResult(
+        server_status="OK",
+        workers_status=workers_status,
+        redis_status=redis_status,
+        celery_beat_status=celery_beat_status,
+        connection_to_gitlab=gitlab_status,
+        connection_to_pulp=pulp_status,
+    )
+    return status_result
 
 
 @router.post(

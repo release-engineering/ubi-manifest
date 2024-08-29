@@ -1,5 +1,6 @@
 import logging
-from typing import Any
+from typing import Any, Optional
+from urllib.parse import urlparse
 
 import ubiconfig
 from pubtools.pulplib import Client, Criteria
@@ -153,3 +154,18 @@ def get_repo_ids_from_cs(client: Client, ubi_binary_cs: str) -> Any:
         )
     )
     return repos
+
+
+def get_gitlab_base_url(config: dict[str, str]) -> Optional[str]:
+    """
+    Returns gitlab base url if the content configs are loaded from gitlab.
+    Returns None if the content configs are loaded from directory.
+    """
+    for config_path in config.values():
+        parsed = urlparse(config_path)
+        # if there is a scheme, content config is passed from Gitlab so
+        # return the base url on which to do healthchek
+        if parsed.scheme:
+            return f"{parsed.scheme}://{parsed.netloc}"
+    # otherwise content config is passed from directory, therefore no healthcheck is needed
+    return None

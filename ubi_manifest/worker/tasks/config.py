@@ -51,7 +51,8 @@ def validate_repo_groups(
 @define
 class Config:
     pulp_url: str = field(
-        validator=validators.matches_re(URL_REGEX, re.VERBOSE), default="some_url"
+        validator=validators.matches_re(URL_REGEX, re.VERBOSE),
+        default="https://some_url",
     )
     pulp_username: str = field(
         validator=validators.matches_re(USERNAME_REGEX), default="username"
@@ -77,6 +78,7 @@ class Config:
         "ubi_manifest.worker.tasks.depsolve",
         "ubi_manifest.worker.tasks.repo_monitor",
         "ubi_manifest.worker.tasks.content_audit",
+        "ubi_manifest.worker.tasks.celery_beat_healthcheck",
     ]
     broker_url: str = field(
         validator=validators.matches_re(URL_REGEX, re.VERBOSE),
@@ -100,6 +102,12 @@ class Config:
             "task": "ubi_manifest.worker.tasks.content_audit.content_audit_task",
             "schedule": int(
                 os.getenv("UBI_MANIFEST_CONTENT_AUDIT_SCHEDULE", str((3 * 60) * 60))
+            ),  # in seconds
+        },
+        "beat-healthcheck-every-N-minutes": {
+            "task": "ubi_manifest.worker.tasks.celery_beat_healthcheck.beat_healthcheck_task",
+            "schedule": int(
+                os.getenv("UBI_MANIFEST_BEAT_HEALTHCHECK", str(60))
             ),  # in seconds
         },
     }

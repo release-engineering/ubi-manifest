@@ -119,3 +119,21 @@ def test_get_repo_groups(pulp):
         "8-aarch64": {"ubi8_repo1_for_aarch64", "ubi8_repo2_for_aarch64"},
         "8-x86_64": {"ubi8_repo1_for_x86_64"},
     }
+
+
+@pytest.mark.parametrize(
+    "config,expected_result",
+    [
+        (
+            {
+                "ubi": "https://gitlab.com/ubi",
+                "client-tools": "https://gitlab.com/client-tools",
+            },
+            "https://gitlab.com",
+        ),
+        ({"ubi": "/path/to/ubi/", "client-tools": ".path/to/client-tools/"}, None),
+    ],
+)
+def test_get_gitlab_base_url(config, expected_result):
+    result = utils.get_gitlab_base_url(config)
+    assert result == expected_result

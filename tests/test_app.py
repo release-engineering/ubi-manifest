@@ -1,7 +1,9 @@
 import json
-from unittest import mock
+from datetime import datetime, timedelta
 
+import pytest
 from attr import define
+from unittest import mock
 
 from .utils import MockedRedis, create_and_insert_repo, create_mock_configs
 
@@ -12,11 +14,159 @@ class MockAsyncResult:
     state: str
 
 
-def test_status(client):
+@pytest.mark.parametrize(
+    "delta_seconds,beat_status",
+    [
+        (30, {"status": "OK", "msg": "Celery beat operable."}),
+        (
+            180,
+            {
+                "status": "Failed",
+                "msg": f"Last heartbeat task ran 0 days, 0 hours and 3 minutes ago.",
+            },
+        ),
+    ],
+)
+@mock.patch("ubi_manifest.app.api.redis.from_url")
+@mock.patch("ubi_manifest.app.api.app.control.inspect")
+def test_status_beat_no_gitlab(
+    inspect,
+    mock_redis,
+    delta_seconds,
+    beat_status,
+    client,
+    requests_mock,
+):
+    inspect.return_value = mock.Mock(
+        ping=mock.Mock(return_value={"worker01": {"ok": "pong"}}),
+        stats=mock.Mock(return_value={"worker01": {"some": "stats"}}),
+        registered=mock.Mock(return_value={"worker01": ["some_task", "other_task"]}),
+        active=mock.Mock(return_value={"worker01": []}),
+        scheduled=mock.Mock(return_value={"worker01": []}),
+    )
+    beat = (datetime.now() - timedelta(seconds=delta_seconds)).isoformat().encode()
+    mock_redis.return_value = MockedRedis(data={"celery-beat-heartbeat": beat})
+    requests_mock.get("https://some_url/pulp/api/v2/status", reason="OK")
+
     response = client.get("/api/v1/status")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "OK"}
+    assert response.json() == {
+        "server_status": "OK",
+        "workers_status": {
+            "availability": {"worker01": {"ok": "pong"}},
+            "stats": {"worker01": {"some": "stats"}},
+            "registered_tasks": {"worker01": ["some_task", "other_task"]},
+            "active_tasks": {"worker01": []},
+            "scheduled_tasks": {"worker01": []},
+        },
+        "redis_status": {"status": "OK", "msg": "Redis is available."},
+        "celery_beat_status": beat_status,
+        "connection_to_gitlab": {"status": "n/a", "msg": "Gitlab is not needed."},
+        "connection_to_pulp": {"status": "OK", "msg": "Pulp available."},
+    }
+
+
+@mock.patch("ubi_manifest.app.api.get_gitlab_base_url")
+@mock.patch("ubi_manifest.app.api.redis.from_url")
+@mock.patch("ubi_manifest.app.api.app.control.inspect")
+def test_status_no_beat_gitlab(
+    inspect,
+    mock_redis,
+    get_gitlab_url,
+    client,
+    requests_mock,
+):
+    inspect.return_value = mock.Mock(
+        ping=mock.Mock(return_value={"worker01": {"ok": "pong"}}),
+        stats=mock.Mock(return_value={"worker01": {"some": "stats"}}),
+        registered=mock.Mock(return_value={"worker01": ["some_task", "other_task"]}),
+        active=mock.Mock(return_value={"worker01": []}),
+        scheduled=mock.Mock(return_value={"worker01": []}),
+    )
+    mock_redis.return_value = MockedRedis(data={})
+    get_gitlab_url.return_value = "https://gitlab.com"
+
+    requests_mock.get("https://gitlab.com/-/health", reason="OK")
+    requests_mock.get("https://some_url/pulp/api/v2/status", reason="OK")
+
+    response = client.get("/api/v1/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "server_status": "OK",
+        "workers_status": {
+            "availability": {"worker01": {"ok": "pong"}},
+            "stats": {"worker01": {"some": "stats"}},
+            "registered_tasks": {"worker01": ["some_task", "other_task"]},
+            "active_tasks": {"worker01": []},
+            "scheduled_tasks": {"worker01": []},
+        },
+        "redis_status": {"status": "OK", "msg": "Redis is available."},
+        "celery_beat_status": {
+            "status": "n/a",
+            "msg": "No heartbeat task ran yet. Wait a minute.",
+        },
+        "connection_to_gitlab": {"status": "OK", "msg": "Gitlab available."},
+        "connection_to_pulp": {"status": "OK", "msg": "Pulp available."},
+    }
+
+
+@mock.patch("ubi_manifest.app.api.get_gitlab_base_url")
+@mock.patch("ubi_manifest.app.api.redis.from_url")
+@mock.patch("ubi_manifest.app.api.app.control.inspect")
+def test_status_errors(
+    inspect,
+    mock_redis,
+    get_gitlab_url,
+    client,
+    requests_mock,
+):
+    inspect.return_value = mock.Mock(
+        ping=mock.Mock(return_value={"worker01": {"ok": "pong"}}),
+        stats=mock.Mock(return_value={"worker01": {"some": "stats"}}),
+        registered=mock.Mock(return_value={"worker01": ["some_task", "other_task"]}),
+        active=mock.Mock(return_value={"worker01": []}),
+        scheduled=mock.Mock(return_value={"worker01": []}),
+    )
+    mock_redis.return_value = MockedRedis(data={}, ping_fail=True)
+    get_gitlab_url.return_value = "https://gitlab.com"
+
+    requests_mock.get(
+        "https://gitlab.com/-/health", status_code=503, reason="Service Unavailable"
+    )
+    requests_mock.get(
+        "https://some_url/pulp/api/v2/status",
+        status_code=503,
+        reason="Service Unavailable",
+    )
+
+    response = client.get("/api/v1/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "server_status": "OK",
+        "workers_status": {
+            "availability": {"worker01": {"ok": "pong"}},
+            "stats": {"worker01": {"some": "stats"}},
+            "registered_tasks": {"worker01": ["some_task", "other_task"]},
+            "active_tasks": {"worker01": []},
+            "scheduled_tasks": {"worker01": []},
+        },
+        "redis_status": {"status": "Failed", "msg": "Connection refused."},
+        "celery_beat_status": {
+            "status": "n/a",
+            "msg": "No heartbeat task ran yet. Wait a minute.",
+        },
+        "connection_to_gitlab": {
+            "status": "Service Unavailable",
+            "msg": "503 Server Error: Service Unavailable for url: https://gitlab.com/-/health",
+        },
+        "connection_to_pulp": {
+            "status": "Service Unavailable",
+            "msg": "503 Server Error: Service Unavailable for url: https://some_url/pulp/api/v2/status",
+        },
+    }
 
 
 def test_task_state(client, auth_header):
