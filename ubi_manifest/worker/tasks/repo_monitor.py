@@ -32,7 +32,7 @@ def repo_monitor_task() -> None:
             if result:
                 to_log[repo.id] = result
 
-    _log_findigs(to_log)
+    _log_findings(to_log)
 
 
 def _check_last_publish(repository: Future[Repository]) -> Union[str, None]:
@@ -42,7 +42,7 @@ def _check_last_publish(repository: Future[Repository]) -> Union[str, None]:
     for distributor in repository.distributors:  # type: ignore
         if distributor.is_rsync:
             time_diff = current_time - distributor.last_publish
-            td_hrs = time_diff.days * 24 * 60 + time_diff.seconds / 3600
+            td_hrs = time_diff.days * 24 + time_diff.seconds / 3600
             _LOG.debug(
                 "Last publish check: %s, last_publish: %s, diff: %.2f",
                 repository.id,  # type: ignore
@@ -58,6 +58,6 @@ def _check_last_publish(repository: Future[Repository]) -> Union[str, None]:
     return out
 
 
-def _log_findigs(data: dict[str, str]) -> None:
+def _log_findings(data: dict[str, str]) -> None:
     for msg in data.values():
         _LOG.warning(msg)
