@@ -13,15 +13,10 @@ from .models import (
     DepsolveItem,
     DepsolverResult,
     DepsolverResultItem,
-    TaskState,
     StatusResult,
+    TaskState,
 )
-from .utils import (
-    get_items_for_depsolving,
-    get_repo_classes,
-    get_gitlab_base_url,
-)
-
+from .utils import get_gitlab_base_url, get_items_for_depsolving, get_repo_classes
 
 REQUEST_TIMEOUT = 20
 

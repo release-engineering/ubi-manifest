@@ -1,9 +1,9 @@
 import json
 from datetime import datetime, timedelta
+from unittest import mock
 
 import pytest
 from attr import define
-from unittest import mock
 
 from .utils import MockedRedis, create_and_insert_repo, create_mock_configs
 

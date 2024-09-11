@@ -1,9 +1,10 @@
+import json
 from datetime import datetime
 from unittest.mock import patch
 
 from ubi_manifest.worker.tasks import celery_beat_healthcheck
+
 from .utils import MockedRedis
-import json
 
 
 @patch("ubi_manifest.worker.tasks.celery_beat_healthcheck.datetime")
