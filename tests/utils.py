@@ -1,5 +1,6 @@
 from unittest.mock import Mock
 
+import redis
 import ubiconfig
 from attrs import define
 from pubtools.pulplib import RpmDependency, YumRepository
@@ -105,6 +106,7 @@ class MockLoader:
 @define
 class MockedRedis:
     data: dict
+    ping_fail: bool = False
 
     def set(self, key: str, value: str, **kwargs) -> None:
         self.data[key] = value
@@ -114,6 +116,11 @@ class MockedRedis:
 
     def keys(self) -> list[str]:
         return list(self.data.keys())
+
+    def ping(self) -> bool:
+        if self.ping_fail:
+            raise ConnectionError("Connection refused.")
+        return True
 
 
 def rpmdeps_from_names(*names):
