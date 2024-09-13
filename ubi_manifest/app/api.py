@@ -114,7 +114,7 @@ def status() -> StatusResult:
             gitlab_status = {"status": gitlab_resp.reason, "msg": "Gitlab available."}
             gitlab_resp.raise_for_status()
         except Exception as ex:  # pylint: disable=broad-except
-            gitlab_status = {"status": gitlab_resp.reason, "msg": str(ex)}
+            gitlab_status = {"status": "Failed", "msg": str(ex)}
     else:
         gitlab_status = {"status": "n/a", "msg": "Gitlab is not needed."}
 
@@ -126,7 +126,7 @@ def status() -> StatusResult:
         pulp_status = {"status": pulp_resp.reason, "msg": "Pulp available."}
         pulp_resp.raise_for_status()
     except Exception as ex:  # pylint: disable=broad-except
-        pulp_status = {"status": pulp_resp.reason, "msg": str(ex)}
+        pulp_status = {"status": "Failed", "msg": str(ex)}
 
     status_result = StatusResult(
         server_status="OK",

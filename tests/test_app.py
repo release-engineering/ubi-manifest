@@ -159,11 +159,11 @@ def test_status_errors(
             "msg": "No heartbeat task ran yet. Wait a minute.",
         },
         "connection_to_gitlab": {
-            "status": "Service Unavailable",
+            "status": "Failed",
             "msg": "503 Server Error: Service Unavailable for url: https://gitlab.com/-/health",
         },
         "connection_to_pulp": {
-            "status": "Service Unavailable",
+            "status": "Failed",
             "msg": "503 Server Error: Service Unavailable for url: https://some_url/pulp/api/v2/status",
         },
     }
