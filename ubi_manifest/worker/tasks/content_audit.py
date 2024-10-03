@@ -73,6 +73,7 @@ def content_audit_task() -> None:
             in_repos = client.search_repository(
                 Criteria.with_id(out_repo.population_sources)
             )
+            modular_rpm_filenames = set()
             if has_modules:
                 modular_rpm_filenames = get_pkgs_from_all_modules(
                     list(in_repos) + [out_repo]

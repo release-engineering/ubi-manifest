@@ -3,8 +3,15 @@ from functools import partial
 from unittest import mock
 
 import pytest
-from pubtools.pulplib import Distributor, ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
+from pubtools.pulplib import (
+    Distributor,
+    ModulemdDefaultsUnit,
+    ModulemdUnit,
+    RpmUnit,
+    Unit,
+)
 
+from ubi_manifest.worker.models import UbiUnit
 from ubi_manifest.worker.tasks import depsolve
 from ubi_manifest.worker.ubi_config import ContentConfigMissing
 
@@ -869,6 +876,30 @@ def test_multiple_population_sources(pulp):
                 assert unit["unit_type"] == "RpmUnit"
                 assert unit["unit_attr"] == "filename"
                 assert unit["value"] == "gcc_src_debug-1-0.src.rpm"
+
+
+@mock.patch("ubi_manifest.worker.tasks.depsolve.redis.from_url")
+def test_save_with_invalid_inner_unit(mock_redis_from_url):
+    """Test scenario to reach the else continue statement in the _save() function
+    of depsolve_task."""
+
+    class InvalidInnerUnit(Unit):
+        def __init__(self):
+            super().__init__(content_type_id="mock_content")
+
+    redis = MockedRedis(data={})
+    mock_redis_from_url.return_value = redis
+
+    invalid_unit = UbiUnit(
+        unit=InvalidInnerUnit(),
+        src_repo_id="mock_repo_id",
+    )
+
+    data = {"mock_repo_id": [invalid_unit]}
+
+    depsolve._save(data)
+
+    mock_redis_from_url.set.assert_not_called()
 
 
 def test_missing_content_config(pulp):

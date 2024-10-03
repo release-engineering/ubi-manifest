@@ -208,6 +208,7 @@ def _save(data: dict[str, list[UbiUnit]]) -> None:
     for repo_id, units in data.items():
         items = []
         for unit in units:
+            item = {}
             if unit.isinstance_inner_unit(RpmUnit):
                 item = {
                     "src_repo_id": unit.associate_source_repo_id,
@@ -229,6 +230,8 @@ def _save(data: dict[str, list[UbiUnit]]) -> None:
                     "unit_attr": "name:stream",
                     "value": f"{unit.name}:{unit.stream}",
                 }
+            else:
+                continue
             items.append(item)
 
         data_for_redis[repo_id] = items
