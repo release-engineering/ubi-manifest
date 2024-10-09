@@ -22,7 +22,10 @@ def validate_content_config(_: AttrsInstance, attr: Any, value: dict[str, str]) 
     for repo_class, url_or_dir in value.items():
         if not re.match(REPO_CLASS_REGEX, repo_class):
             raise ValueError(
-                f"Repo classes in '{attr.name}' must match regex '{REPO_CLASS_REGEX}'. '{repo_class}' doesn't."
+                (
+                    f"Repo classes in '{attr.name}' must match regex '{REPO_CLASS_REGEX}'."
+                    f"'{repo_class}' doesn't."
+                )
             )
         url_or_dir = str(url_or_dir)
         if url_or_dir.lower().startswith(("http://", "https://")):
@@ -33,7 +36,8 @@ def validate_content_config(_: AttrsInstance, attr: Any, value: dict[str, str]) 
             value_type = "Path"
         if not re.match(regex, url_or_dir, re.VERBOSE):
             raise ValueError(
-                f"{value_type} to config in '{attr.name}' must match regex '{regex}'. '{url_or_dir}' doesn't."
+                f"{value_type} to config in '{attr.name}' must match regex '{regex}'."
+                f"'{url_or_dir}' doesn't."
             )
 
 
