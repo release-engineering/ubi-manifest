@@ -1405,13 +1405,13 @@ setuptools = "*"
 
 [[package]]
 name = "pubtools-pulplib"
-version = "2.39.2"
+version = "2.41.0"
 description = "A Pulp library for publishing tools"
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "pubtools-pulplib-2.39.2.tar.gz", hash = "sha256:3a7b5b3ba76b3b0f04faeb228a76748efc4fda368642699f4f70633e357a57cf"},
-    {file = "pubtools_pulplib-2.39.2-py3-none-any.whl", hash = "sha256:a47eae32f4697048d622e3dec2e7733a95b21b1c66ac66647d2c3804bd83e062"},
+    {file = "pubtools-pulplib-2.41.0.tar.gz", hash = "sha256:83b3d5b2cbc9c35c1a29f973181679fe006c6cf599496c13bdc43a3746333bdf"},
+    {file = "pubtools_pulplib-2.41.0-py3-none-any.whl", hash = "sha256:789612c1a7e8e535a43600b406a92d7b5205d2febe541d23a0cee1a1180e071c"},
 ]
 
 [package.dependencies]
