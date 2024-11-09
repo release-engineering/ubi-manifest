@@ -1924,13 +1924,13 @@ files = [
 
 [[package]]
 name = "rpmdyn"
-version = "2024.10"
+version = "2024.11"
 description = "Alternative dynamic RPM bindings for Python"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "rpmdyn-2024.10-py3-none-any.whl", hash = "sha256:13c4d44505002b6d250b58c07285403af6cda71505c7d9a347a4e4f92b1dde16"},
-    {file = "rpmdyn-2024.10.tar.gz", hash = "sha256:9d796f863d357b39a18a760aac091a3be94a0ce69a73c25594607bf437ec9618"},
+    {file = "rpmdyn-2024.11-py3-none-any.whl", hash = "sha256:32dd79124e81eaf29d5b1ebf4c7c2d60aacc6a8a6a82cc9a55ef909ba81e0ed9"},
+    {file = "rpmdyn-2024.11.tar.gz", hash = "sha256:cbdf2ba08cf37d6ac4c22d10fffe6c02c0365c48acd7132718ece76196af4d68"},
 ]
 
 [package.dependencies]
