@@ -316,7 +316,7 @@ def _get_population_sources_per_cs(
 
 
 def validate_depsolver_flags(
-    depsolver_flags: dict[tuple[str, str], dict[str, Any]]
+    depsolver_flags: dict[tuple[str, str], dict[str, Any]],
 ) -> dict[str, Any]:
     """
     Validate all acquired flags, they have to be consistent for all repositories
