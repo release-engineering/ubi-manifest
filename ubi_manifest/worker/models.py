@@ -37,7 +37,7 @@ class UbiUnit:
         return NotImplemented
 
 
-@define
+@define(frozen=True)
 class PackageToExclude:
     """
     Representation of a excluded/blacklisted package.
