@@ -2,54 +2,104 @@ import logging
 from unittest import mock
 
 import pytest
-from pubtools.pulplib import Distributor, ModulemdDefaultsUnit, ModulemdUnit, RpmUnit
+from pubtools.pulplib import Distributor, ModulemdUnit, RpmUnit
 
+from tests.utils import MockLoader, create_and_insert_repo
 from ubi_manifest.worker.tasks.content_audit import content_audit_task
 
-from .utils import MockLoader, create_and_insert_repo
 
+def test_pipeline(pulp, caplog):
+    caplog.set_level(logging.DEBUG, logger="ubi_manifest.worker.tasks.auditing")
 
-def _setup_population_sources(pulp):
-    ubi_repo = create_and_insert_repo(
+    # Input repos
+    distributor_rhel_binary_repo_1 = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="rhel_bin_repo-1",
+        relative_url="foo/rhel_bin_repo-1",
+    )
+    distributor_rhel_source_repo_1 = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="rhel_source_repo-1",
+        relative_url="foo/rhel_source_repo-1",
+    )
+    distributor_rhel_debug_repo_1 = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="rhel_debug_repo-1",
+        relative_url="foo/rhel_debug_repo-1",
+    )
+    rhel_binary_repo_1 = create_and_insert_repo(
+        id=distributor_rhel_binary_repo_1.repo_id,
         pulp=pulp,
-        id="ubi_repo",
-        population_sources=[
-            "rhel_repo-1",
-            "rhel_repo-2",
-        ],
+        content_set="cs_rpm_in",
+        relative_url=distributor_rhel_binary_repo_1.relative_url,
+        distributors=[distributor_rhel_binary_repo_1],
+    )
+    # non modular
+    rhel_source_repo_1 = create_and_insert_repo(
+        id=distributor_rhel_source_repo_1.repo_id,
+        pulp=pulp,
+        content_set="cs_srpm_in",
+        relative_url=distributor_rhel_source_repo_1.relative_url,
+        distributors=[distributor_rhel_source_repo_1],
+    )
+    # non modular
+    rhel_debug_repo_1 = create_and_insert_repo(
+        id=distributor_rhel_debug_repo_1.repo_id,
+        pulp=pulp,
+        content_set="cs_debug_in",
+        relative_url=distributor_rhel_debug_repo_1.relative_url,
+        distributors=[distributor_rhel_debug_repo_1],
+    )
+
+    # Output repos
+    # modular
+    ubi_binary_repo_1 = create_and_insert_repo(
+        pulp=pulp,
+        id="ubi_bin_repo-1",
+        population_sources=["rhel_bin_repo-1"],
         ubi_population=True,
         relative_url="foo/bar/os",
         ubi_config_version="8",
         content_set="cs_rpm_out",
     )
-    distributor_rhel_1 = Distributor(
-        id="yum_distributor",
-        type_id="yum_distributor",
-        repo_id="rhel_repo-1",
-        relative_url="foo/rhel-1/os",
-    )
-    distributor_rhel_2 = Distributor(
-        id="yum_distributor",
-        type_id="yum_distributor",
-        repo_id="rhel_repo-2",
-        relative_url="foo/rhel-2/os",
-    )
-    rhel_repo_1 = create_and_insert_repo(
-        id=distributor_rhel_1.repo_id,
+    # non modular
+    ubi_source_repo_1 = create_and_insert_repo(
         pulp=pulp,
-        content_set="cs_rpm_in",
-        relative_url=distributor_rhel_1.relative_url,
-        distributors=[distributor_rhel_1],
+        id="ubi_source_repo-1",
+        population_sources=["rhel_source_repo-1"],
+        ubi_population=True,
+        relative_url="foo/bar/os",
+        ubi_config_version="8",
+        content_set="cs_srpm_out",
     )
-    rhel_repo_2 = create_and_insert_repo(
-        id=distributor_rhel_2.repo_id,
+    # non modular
+    ubi_debug_repo_1 = create_and_insert_repo(
         pulp=pulp,
-        content_set="cs_rpm_in",
-        relative_url=distributor_rhel_2.relative_url,
-        distributors=[distributor_rhel_2],
+        id="ubi_debug_repo-1",
+        population_sources=["rhel_debug_repo-1"],
+        ubi_population=True,
+        relative_url="foo/bar/os",
+        ubi_config_version="8",
+        content_set="cs_debug_out",
     )
 
-    rpm_1 = RpmUnit(
+    module_1 = ModulemdUnit(
+        name="fake_module-1",
+        stream="1",
+        version=10,
+        context="b7fad3bf",
+        arch="x86_64",
+        artifacts=[
+            "bash-0:5.0.7-1.module+el8+2240+23e6f3c3.src",
+            "bash-0:5.0.7-1.module+el8+2240+23e6f3c3.noarch",
+            "bash-debuginfo-0:5.0.7-1.module+el8+2240+23e6f3c3.noarch",
+        ],
+    )
+
+    gcc_rpm_current = RpmUnit(
         name="gcc",
         version="9.0.1",
         release="200",
@@ -60,123 +110,7 @@ def _setup_population_sources(pulp):
         requires=[],
         provides=[],
     )
-    rpm_2 = RpmUnit(
-        name="bind",
-        version="10",
-        release="200",
-        epoch="1",
-        arch="x86_64",
-        sourcerpm="bind_src-1-0.src.rpm",
-        filename="bind-10.200.x86_64.rpm",
-        requires=[],
-        provides=[],
-    )
-    rpm_3 = RpmUnit(  # modular, should be skipped
-        name="bind",
-        version="12",
-        release="2.module+el8+2248+23d5e2f2",
-        epoch="0",
-        arch="x86_64",
-        sourcerpm="bind-12-2.module+el8+2248+23d5e2f2.src.rpm",
-        filename="bind-12-2.module+el8+2248+23d5e2f2.noarch.rpm",
-    )
-    rpm_4 = RpmUnit(name="httpd.src", version="1", release="2", arch="x86_64")
-    rpm_5 = RpmUnit(name="pkg-debuginfo.foo", version="1", release="2", arch="x86_64")
-    rpm_6 = RpmUnit(name="package-name-abc", version="1", release="2", arch="x86_64")
-    module_1 = ModulemdUnit(
-        name="fake_module",
-        stream="1",
-        version=10,
-        context="b7fad3bf",
-        arch="x86_64",
-        artifacts=[
-            "test-0:1.24-3.module+el8.1.0+2934+dec45db7.noarch",
-            "test-0:1.24-3.module+el8.1.0+2934+dec45db7.src",
-            "bind-0:12-2.module+el8+2248+23d5e2f2.noarch",
-            "bind-0:12-2.module+el8+2248+23d5e2f2.src",
-        ],
-    )
-    module_2 = ModulemdUnit(
-        name="some_module1",
-        stream="1",
-        version=10,
-        context="b7fad3bf",
-        arch="x86_64",
-        artifacts=[
-            "test-1:1.24-3.module+el8.1.0+2934+dec45db7.noarch",
-            "test-1:1.24-3.module+el8.1.0+2934+dec45db7.src",
-        ],
-    )
-    module_3 = ModulemdUnit(
-        name="fake_module",
-        stream="3",
-        version=10,
-        context="b7fad3bf",
-        arch="x86_64",
-        artifacts=[
-            "test-0:4.6-2.module+el8.1.0+2934+dec45db7.noarch",
-            "test-0:4.6-2.module+el8.1.0+2934+dec45db7.src",
-        ],
-    )
-    default_1 = ModulemdDefaultsUnit(
-        name="some_module_defaults1",
-        stream="1",
-        repo_id="ubi_repo",
-        profiles={"1.1": ["default"], "1.0": []},
-    )
-    default_2 = ModulemdDefaultsUnit(
-        name="some_module_defaults2",
-        stream="1",
-        repo_id="ubi_repo",
-        profiles={"1.0": ["default"]},
-    )
-
-    pulp.insert_units(rhel_repo_1, [rpm_1, rpm_3, rpm_5, module_1, module_3, default_1])
-    pulp.insert_units(rhel_repo_2, [rpm_2, rpm_4, rpm_6, module_2, default_2])
-    pulp.insert_units(
-        ubi_repo,
-        [
-            rpm_1,
-            rpm_2,
-            rpm_3,
-            rpm_4,
-            rpm_5,
-            rpm_6,
-            module_1,
-            module_2,
-            module_3,
-            default_1,
-            default_2,
-        ],
-    )
-
-
-@pytest.mark.parametrize("debug", [False, True], ids=["bin", "debug"])
-def test_content_audit_outdated(debug, pulp, caplog):
-    """
-    Test that a run of the content audit task completes without issue and
-    reports when content is outdated.
-    """
-
-    caplog.set_level(logging.DEBUG, logger="ubi_manifest.worker.tasks.content_audit")
-    _setup_population_sources(pulp)
-
-    repo_id = "outdated_ubi_debug_repo" if debug else "outdated_ubi_repo"
-
-    # populate our outdated UBI repo
-    ubi_repo = create_and_insert_repo(
-        pulp=pulp,
-        id=repo_id,
-        population_sources=[
-            "rhel_repo-1",
-            "rhel_repo-2",
-        ],
-        ubi_population=True,
-        relative_url="foo/bar/os",
-        ubi_config_version="8",
-        content_set="cs_rpm_out",
-    )
-    rpm_1 = RpmUnit(
+    gcc_rpm_outdated = RpmUnit(
         name="gcc",
         version="8.2.1",  # outdated
         release="200",
@@ -185,7 +119,7 @@ def test_content_audit_outdated(debug, pulp, caplog):
         sourcerpm="gcc_src-1-0.src.rpm",
         filename="gcc-10.200.x86_64.rpm",
     )
-    rpm_2 = RpmUnit(
+    bind_rpm = RpmUnit(
         name="bind",
         version="10",
         release="200",
@@ -193,57 +127,94 @@ def test_content_audit_outdated(debug, pulp, caplog):
         arch="x86_64",
         sourcerpm="bind_src-1-0.src.rpm",
         filename="bind-10.200.x86_64.rpm",
+        requires=[],
+        provides=[],
     )
-    module_1 = ModulemdUnit(
-        name="fake_module",
-        stream="1",
-        version=10,
-        context="b7fad3bf",
+
+    httpd_srpm_outdated = RpmUnit(
+        name="httpd.src",
+        version="1",
+        release="2",
         arch="x86_64",
-        artifacts=[
-            "test-0:1.24-3.module+el8.1.0+2934+dec45db7.noarch",
-            "test-0:1.24-3.module+el8.1.0+2934+dec45db7.src",
-            "bind-0:12-2.module+el8+2248+23d5e2f2.noarch",
-            "bind-0:12-2.module+el8+2248+23d5e2f2.src",
-        ],
     )
-    module_2 = ModulemdUnit(
-        name="some_module1",
-        stream="1",
-        version=7,  # outdated
-        context="b7fad3bf",
+    httpd_srpm_current = RpmUnit(
+        name="httpd.src",
+        version="2",  # newer version
+        release="2",
         arch="x86_64",
-        artifacts=[
-            "test-0:5.module+el8.1.0+2934+dec45db7.noarch",
-            "test-0:5.module+el8.1.0+2934+dec45db7.src",
-        ],
     )
-    module_3 = ModulemdUnit(
-        name="fake_module",
-        stream="3",
-        version=10,
-        context="b7fad3bf",
+
+    pkg_debuginfo_rpm = RpmUnit(
+        name="pkg-debuginfo.foo",
+        version="1",
+        release="2",
         arch="x86_64",
-        artifacts=[
-            "test-0:4.6-2.module+el8.1.0+2934+dec45db7.noarch",
-            "test-0:4.6-2.module+el8.1.0+2934+dec45db7.src",
-        ],
     )
-    default_1 = ModulemdDefaultsUnit(
-        name="some_module_defaults1",
-        stream="1",
-        repo_id="outdated_ubi_repo",
-        profiles={"1.0": ["default"]},  # outdated
+
+    blacklisted_abc_rpm = RpmUnit(
+        name="package-name-abc",
+        version="1",
+        release="2",
+        arch="x86_64",
     )
-    default_2 = ModulemdDefaultsUnit(
-        name="some_module_defaults2",
-        stream="1",
-        repo_id="outdated_ubi_repo",
-        profiles={"1.0": ["default"]},
+
+    output_only_rpm = RpmUnit(
+        name="neovim",
+        version="0.10.4",
+        release="1.fc41",
+        arch="x86_64",
+    )
+    input_only_rpm = RpmUnit(
+        name="bash",
+        version="5.0.7",
+        release="1.fc30",
+        arch="x86_64",
+    )
+
+    bash_srpm = RpmUnit(
+        name="bash.src",
+        version="5.0.7",
+        release="1.fc30",
+        arch="x86_64",
+    )
+    bash_debuginfo_rpm = RpmUnit(
+        name="bash-debuginfo",
+        version="5.0.7",
+        release="1.fc30",
+        arch="x86_64",
+    )
+
+    pulp.insert_units(
+        rhel_binary_repo_1, [gcc_rpm_current, bind_rpm, module_1, input_only_rpm]
     )
     pulp.insert_units(
-        ubi_repo,
-        [rpm_1, rpm_2, module_1, module_2, module_3, default_1, default_2],
+        rhel_source_repo_1,
+        [httpd_srpm_current, bash_srpm],
+    )
+    pulp.insert_units(
+        rhel_debug_repo_1,
+        [
+            pkg_debuginfo_rpm,
+            bash_debuginfo_rpm,
+            blacklisted_abc_rpm,
+        ],
+    )
+
+    pulp.insert_units(
+        ubi_binary_repo_1,
+        [output_only_rpm, gcc_rpm_outdated, bind_rpm, module_1],
+    )
+    pulp.insert_units(
+        ubi_source_repo_1,
+        [httpd_srpm_outdated, bash_srpm],
+    )
+    pulp.insert_units(
+        ubi_debug_repo_1,
+        [
+            pkg_debuginfo_rpm,
+            bash_debuginfo_rpm,
+            blacklisted_abc_rpm,
+        ],
     )
 
     with mock.patch("ubi_manifest.worker.utils.Client") as client:
@@ -253,82 +224,58 @@ def test_content_audit_outdated(debug, pulp, caplog):
             # should run without error
             content_audit_task()
 
-        # should have logged warnings
-        if debug:
-            # debug repo won't have modular content and will include debuginfo whitelist
-            expected_logs = [
-                "UBI rpm 'gcc' version is outdated (current: ('0', '8.2.1', '200'), latest: ('0', '9.0.1', '200'))",
-                "whitelisted content missing from UBI and/or population sources;\n\tpkg-debuginfo",
+            expected_ubi_binary_repo_1 = [
+                f"Processing and auditing UBI repo '{ubi_binary_repo_1.id}' with modular content...",
+                f"[{ubi_binary_repo_1.id}] UBI rpm 'gcc' is outdated (current: ('0', '8.2.1', '200'), latest: ('0', '9.0.1', '200'))",
+                f"[{ubi_binary_repo_1.id}] Whitelisted package 'neovim' found in out repo but not in any input repos!",
+                f"[{ubi_binary_repo_1.id}] Whitelisted package 'bash' found in input repos but not in output repo!",
             ]
-        else:
-            expected_logs = [
-                "UBI rpm 'gcc' version is outdated (current: ('0', '8.2.1', '200'), latest: ('0', '9.0.1', '200'))",
-                "Skipping modular RPM bind-12-2.module+el8+2248+23d5e2f2.noarch.rpm",
-                "UBI modulemd 'some_module1:1' version is outdated (current: 7, latest: 10)",
-                "UBI modulemd_defaults 'some_module_defaults1:1' version is outdated",
+
+            expected_ubi_source_repo_1 = [
+                f"Skipping source RPM: {ubi_source_repo_1.id}"
             ]
-        for msg in expected_logs:
-            assert f"[{repo_id}] {msg}" in caplog.text
+            unexpected_ubi_source_repo_1 = [
+                f"Processing and auditing UBI repo '{ubi_source_repo_1.id}'...",
+                f"[{ubi_source_repo_1.id}] UBI rpm 'httpd.src' is outdated (current: ('0', '1', '2'), latest: ('0', '2', '2'))",
+                f"[{ubi_source_repo_1.id}] Whitelisted package 'gcc' not found in any input or output repositories.",
+                f"[{ubi_source_repo_1.id}] Whitelisted package 'bash' not found in any input or output repositories.",
+                f"[{ubi_source_repo_1.id}] Whitelisted package 'neovim' not found in any input or output repositories.",
+            ]  # these will all become valid with srpm check implementation
+
+            for bad_log in unexpected_ubi_source_repo_1:
+                assert (
+                    bad_log not in caplog.text
+                )  # these are all skipped for now, but will be readded with srpm check implementation
+
+            expected_ubi_debug_repo_1 = [
+                f"Processing and auditing UBI repo '{ubi_debug_repo_1.id}'...",
+                f"[{ubi_debug_repo_1.id}] blacklisted content found in output repository;\n\tpackage-name-abc",
+                f"[{ubi_debug_repo_1.id}] Whitelisted package 'pkg-debuginfo' not found in any input or output repositories.",
+            ]
+
+            expected_logs = (
+                expected_ubi_binary_repo_1
+                + expected_ubi_source_repo_1
+                + expected_ubi_debug_repo_1
+            )
+
+            for log in expected_logs:
+                assert log in caplog.text
 
 
-def test_content_audit_blacklisted(pulp, caplog):
-    """
-    Test that a run of the content audit task completes without issue and
-    reports when content is blacklisted.
-    """
-
-    caplog.set_level(logging.DEBUG, logger="ubi_manifest.worker.tasks.content_audit")
-    _setup_population_sources(pulp)
-
-    ubi_repo = create_and_insert_repo(
+def test_pipeline_with_invalid_repo(pulp):
+    create_and_insert_repo(
         pulp=pulp,
-        id="contaminated_ubi_repo",
-        population_sources=[
-            "rhel_repo-1",
-            "rhel_repo-2",
-            "bad_repo",
-        ],
+        id="unknown_out_repo",
+        population_sources=["unknown_in_repo"],
         ubi_population=True,
         relative_url="foo/bar/os",
         ubi_config_version="8",
         content_set="cs_rpm_out",
     )
-    bad_dist = Distributor(
-        id="yum_distributor",
-        type_id="yum_distributor",
-        repo_id="bad_repo",
-        relative_url="foo/rhel-2/os",
-    )
-    bad_repo = create_and_insert_repo(
-        id=bad_dist.repo_id,
-        pulp=pulp,
-        content_set="cs_rpm_in",
-        relative_url=bad_dist.relative_url,
-        distributors=[bad_dist],
-    )
-    blacklisted = RpmUnit(
-        name="kernel",
-        version="10",
-        release="200",
-        epoch="1",
-        arch="x86_64",
-        sourcerpm="kernel-1-0.src.rpm",
-        filename="kernel-10.200.x86_64.rpm",
-        requires=[],
-        provides=[],
-    )
-    pulp.insert_units(bad_repo, [blacklisted])
-    pulp.insert_units(ubi_repo, [blacklisted])
 
     with mock.patch("ubi_manifest.worker.utils.Client") as client:
-        with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
-            client.return_value = pulp.client
+        client.return_value = pulp.client
 
-            # should run without error
+        with pytest.raises(ValueError, match="unexpected id"):
             content_audit_task()
-
-        # should have logged a warning
-        assert (
-            "[contaminated_ubi_repo] blacklisted content found in input repositories;\n\tkernel"
-            in caplog.text
-        )

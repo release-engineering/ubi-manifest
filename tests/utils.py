@@ -57,7 +57,14 @@ class MockLoader:
                 ]
             },
             "packages": {
-                "include": ["package-name-.*", "gcc.*", "httpd.src", "pkg-debuginfo.*"],
+                "include": [
+                    "package-name-.*",
+                    "gcc.*",
+                    "httpd.src",
+                    "pkg-debuginfo.*",
+                    "bash",
+                    "neovim",
+                ],
                 "exclude": ["package-name*.*", "kernel", "kernel.x86_64"],
             },
             "content_sets": {
@@ -85,6 +92,8 @@ class MockLoader:
                     "httpd.src",
                     "pkg-debuginfo.*",
                     "bind.*",
+                    "neovim",
+                    "bash",
                 ],
                 "exclude": ["package-name*.*", "kernel", "kernel.x86_64"],
             },
