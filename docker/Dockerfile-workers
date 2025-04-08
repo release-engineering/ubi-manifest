@@ -4,7 +4,7 @@ LABEL maintainer="Red Hat - EXD"
 
 WORKDIR /src
 
-# Switch to priviledged user to install dependencies and application
+# Switch to privileged user to install dependencies and application
 USER 0
 
 # copy config
@@ -14,22 +14,22 @@ COPY ./conf/app.conf /etc/ubi_manifest/app.conf
 COPY ./conf/certs/* /etc/pki/ca-trust/source/anchors/
 RUN update-ca-trust extract
 
-ENV POETRY_VERSION="1.7.0"\
-    # Let poetry use the virtualenv that comes with the base image
-    POETRY_VIRTUALENVS_CREATE=false\
-    # Path to the virtualenv from base image
-    VIRTUAL_ENV=${APP_ROOT}\
-    # Add os-level module to PYTHONPATH so we can use rpm module
-    PYTHONPATH="${PYTHONPATH}:/usr/lib64/python3.9/site-packages"
+# Let poetry use the virtualenv that comes with the base image
+ENV POETRY_VIRTUALENVS_CREATE=false
+# Path to the virtualenv from base image
+ENV VIRTUAL_ENV=${APP_ROOT}
+# Add os-level module to PYTHONPATH so we can use rpm module
+ENV PYTHONPATH="${PYTHONPATH}:/usr/lib64/python3.9/site-packages"
 
 COPY . .
 
+RUN pip install --upgrade pip
 # install poetry
 RUN pip install poetry
 
 RUN poetry install
 
-# Switch back to unpriviledged user to run the application
+# Switch back to unprivileged user to run the application
 USER 1001
 
 
