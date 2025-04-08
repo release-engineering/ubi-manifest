@@ -44,12 +44,12 @@ requests-mock = "*"
 optional = true
 
 [tool.poetry.group.dev.dependencies]
-black = "*"
-pre-commit = "*"
-mypy = "*"
-pylint = "*"
-pytest-cov = "*"
-uvicorn = {version = "*", extras = ["standard"]}
+black = "25.1.0"
+pre-commit = "4.2.0"
+mypy = "1.15.0"
+pylint = "3.3.6"
+pytest-cov = "6.1.1"
+uvicorn = {version = "0.34.0", extras = ["standard"]}
 
 [tool.poetry.group.docs]
 optional = true
