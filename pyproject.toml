@@ -26,9 +26,8 @@ pubtools-pulplib = "*"
 attrs = "*"
 more-executors = "*"
 ubi-config = "*"
-requests = "^2.32.3"
-types-requests = "^2.32.0.20240712"
-
+requests = "*"
+types-requests = "*"
 
 [tool.poetry.group.test]
 optional = true
@@ -39,7 +38,7 @@ httpx = "*"
 testfixtures = "*"
 rpmdyn = "*"
 bandit = "*"
-requests-mock = "^1.12.1"
+requests-mock = "*"
 
 [tool.poetry.group.dev]
 optional = true
