@@ -12,7 +12,7 @@ jobs:
       contents: write
     steps:
       - name: Publish PyPi package
-        uses: code-specialist/pypi-poetry-publish@v1
+        uses: code-specialist/pypi-poetry-publish@9009a9cb531bba9623ba89b7ef329d61619a0bb6 # v1
         with:
           ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLISH_REGISTRY_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
