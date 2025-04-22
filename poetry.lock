@@ -2053,14 +2053,14 @@ files = [
 
 [[package]]
 name = "rpmdyn"
-version = "2025.3.31"
+version = "2025.4"
 description = "Alternative dynamic RPM bindings for Python"
 optional = false
 python-versions = ">=3.8"
 groups = ["test"]
 files = [
-    {file = "rpmdyn-2025.3.31-py3-none-any.whl", hash = "sha256:6f920f64dcc0bab967329a7f3abedfae713f9829576f37c17066559571c27aac"},
-    {file = "rpmdyn-2025.3.31.tar.gz", hash = "sha256:08d2c5b9fed01e87e3e8dc9b745539095097c71d8dbc336bb4a3b4b72c9eadec"},
+    {file = "rpmdyn-2025.4-py3-none-any.whl", hash = "sha256:5287e3c312bf5dcf2012d2367d93cf6c01e0795b1914be268fbf2a5d7e8f3b2d"},
+    {file = "rpmdyn-2025.4.tar.gz", hash = "sha256:4cf9c946eb2abbeea239a9c2f8a84fe14d33e61bb71fe62853d08eccc2dba94f"},
 ]
 
 [package.dependencies]
@@ -2528,14 +2528,14 @@ zstd = ["zstandard (>=0.18.0)"]
 
 [[package]]
 name = "uvicorn"
-version = "0.34.1"
+version = "0.34.2"
 description = "The lightning-fast ASGI server."
 optional = false
 python-versions = ">=3.9"
 groups = ["dev", "server"]
 files = [
-    {file = "uvicorn-0.34.1-py3-none-any.whl", hash = "sha256:984c3a8c7ca18ebaad15995ee7401179212c59521e67bfc390c07fa2b8d2e065"},
-    {file = "uvicorn-0.34.1.tar.gz", hash = "sha256:af981725fc4b7ffc5cb3b0e9eda6258a90c4b52cb2a83ce567ae0a7ae1757afc"},
+    {file = "uvicorn-0.34.2-py3-none-any.whl", hash = "sha256:deb49af569084536d269fe0a6d67e3754f104cf03aba7c11c40f01aadf33c403"},
+    {file = "uvicorn-0.34.2.tar.gz", hash = "sha256:0e929828f6186353a80b58ea719861d2629d766293b6d19baf086ba31d4f3328"},
 ]
 
 [package.dependencies]
@@ -2838,4 +2838,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9"
-content-hash = "94b0d34c9f74005f68c9a9912bee17f96fb31405185b99994ac860d3679932f2"
+content-hash = "4ce77afa74e271f37c9387a0a359cbe8d65d319a6bd57e36439c848ddcf33364"
