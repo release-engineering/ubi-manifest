@@ -105,7 +105,7 @@ def is_blacklisted(package: UbiUnit, blacklist: list[PackageToExclude]) -> bool:
 
 def get_n_latest_from_content(
     content: set[UbiUnit],
-    blacklist: list[PackageToExclude],
+    blacklist: Optional[list[PackageToExclude]] = None,
     modular_rpms: Optional[set[str]] = None,
 ) -> list[UbiUnit]:
     """
@@ -118,7 +118,7 @@ def get_n_latest_from_content(
                 _LOG.debug("Skipping modular RPM %s", item.filename)
                 continue
 
-        if is_blacklisted(item, blacklist):
+        if blacklist and is_blacklisted(item, blacklist):
             continue
 
         name_rpms_maps.setdefault(item.name, []).append(item)
