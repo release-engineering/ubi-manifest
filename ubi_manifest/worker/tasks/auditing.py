@@ -78,10 +78,12 @@ class NonModularAuditor:
 
         def log_warning(
             warn_tuple: tuple[str, tuple[str, str, str], tuple[str, str, str]],
+            arch: str,
         ) -> None:
             _LOG.warning(
-                "[%s] UBI rpm '%s' is outdated (current: %s, latest: %s)",
+                "[%s] UBI rpm of %s '%s' is outdated (current: %s, latest: %s)",
                 self.out_repo_id,
+                arch,
                 *warn_tuple,
             )
 
@@ -96,7 +98,7 @@ class NonModularAuditor:
                 out_evr,
                 in_evr,
             ):  # type: ignore
-                log_warning((out_unit.name, out_evr, in_evr))
+                log_warning((out_unit.name, out_evr, in_evr), name_arch[1])
 
     def check_content_rules(self) -> None:
         """
