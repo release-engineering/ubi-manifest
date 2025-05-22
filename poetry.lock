@@ -2465,9 +2465,28 @@ description = "A Python Library for accessing Universal Base Image configuration
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
+markers = "python_version >= \"3.12\""
 files = [
     {file = "ubi-config-3.1.1.tar.gz", hash = "sha256:e64dd1ce68293e005df8625e1dfa1036ae032631d33c43db6c3a97ae52149431"},
     {file = "ubi_config-3.1.1-py3-none-any.whl", hash = "sha256:d178928f43e042185720ec1ce87352c4e6cd55f8ef4113b67fb126da8dcc0021"},
+]
+
+[package.dependencies]
+jsonschema = "*"
+PyYAML = "*"
+requests = "*"
+
+[[package]]
+name = "ubi-config"
+version = "3.2.1"
+description = "A Python Library for accessing Universal Base Image configuration"
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+markers = "python_version <= \"3.11\""
+files = [
+    {file = "ubi_config-3.2.1-py3-none-any.whl", hash = "sha256:67ca281eebaae2790e7c20b6f79602817f859071860fe83889a9385dc0d62c1e"},
+    {file = "ubi_config-3.2.1.tar.gz", hash = "sha256:3210c93df4f80205167c6e3b4a052a9a8f692e227b1593a5e82edea8f0db6645"},
 ]
 
 [package.dependencies]
