@@ -2471,7 +2471,6 @@ description = "A Python Library for accessing Universal Base Image configuration
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
-markers = "python_version >= \"3.12\""
 files = [
     {file = "ubi-config-3.1.1.tar.gz", hash = "sha256:e64dd1ce68293e005df8625e1dfa1036ae032631d33c43db6c3a97ae52149431"},
     {file = "ubi_config-3.1.1-py3-none-any.whl", hash = "sha256:d178928f43e042185720ec1ce87352c4e6cd55f8ef4113b67fb126da8dcc0021"},
@@ -2483,33 +2482,15 @@ PyYAML = "*"
 requests = "*"
 
 [[package]]
-name = "ubi-config"
-version = "3.2.1"
-description = "A Python Library for accessing Universal Base Image configuration"
-optional = false
-python-versions = "<4.0,>=3.9"
-groups = ["main"]
-markers = "python_version <= \"3.11\""
-files = [
-    {file = "ubi_config-3.2.1-py3-none-any.whl", hash = "sha256:67ca281eebaae2790e7c20b6f79602817f859071860fe83889a9385dc0d62c1e"},
-    {file = "ubi_config-3.2.1.tar.gz", hash = "sha256:3210c93df4f80205167c6e3b4a052a9a8f692e227b1593a5e82edea8f0db6645"},
-]
-
-[package.dependencies]
-jsonschema = "*"
-PyYAML = "*"
-requests = "*"
-
-[[package]]
 name = "urllib3"
-version = "2.3.0"
+version = "2.5.0"
 description = "HTTP library with thread-safe connection pooling, file post, and more."
 optional = false
 python-versions = ">=3.9"
 groups = ["main", "docs", "test"]
 files = [
-    {file = "urllib3-2.3.0-py3-none-any.whl", hash = "sha256:1cee9ad369867bfdbbb48b7dd50374c0967a0bb7710050facf0dd6911440e3df"},
-    {file = "urllib3-2.3.0.tar.gz", hash = "sha256:f8c5449b3cf0861679ce7e0503c7b44b5ec981bec0d1d3795a07f1ba96f0204d"},
+    {file = "urllib3-2.5.0-py3-none-any.whl", hash = "sha256:e6b01673c0fa6a13e374b50871808eb3bf7046c4b125b216f6bf1cc604cff0dc"},
+    {file = "urllib3-2.5.0.tar.gz", hash = "sha256:3fc47733c7e419d4bc3f6b3dc2b4f890bb743906a30d56ba4a5bfa4bbff92760"},
 ]
 
 [package.extras]
