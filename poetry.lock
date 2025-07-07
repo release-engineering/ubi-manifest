@@ -141,14 +141,14 @@ dev = ["backports.zoneinfo ; python_version < \"3.9\"", "freezegun (>=1.0,<2.0)"
 
 [[package]]
 name = "bandit"
-version = "1.8.5"
+version = "1.8.6"
 description = "Security oriented static analyser for python code."
 optional = false
 python-versions = ">=3.9"
 groups = ["test"]
 files = [
-    {file = "bandit-1.8.5-py3-none-any.whl", hash = "sha256:cb2e57524e99e33ced48833c6cc9c12ac78ae970bb6a450a83c4b506ecc1e2f9"},
-    {file = "bandit-1.8.5.tar.gz", hash = "sha256:db812e9c39b8868c0fed5278b77fffbbaba828b4891bc80e34b9c50373201cfd"},
+    {file = "bandit-1.8.6-py3-none-any.whl", hash = "sha256:3348e934d736fcdb68b6aa4030487097e23a501adf3e7827b63658df464dddd0"},
+    {file = "bandit-1.8.6.tar.gz", hash = "sha256:dbfe9c25fc6961c2078593de55fd19f2559f9e45b99f1272341f5b95dea4e56b"},
 ]
 
 [package.dependencies]
@@ -2344,6 +2344,7 @@ description = "A collection of helpers and mock objects for unit tests and doc t
 optional = false
 python-versions = ">=3.7"
 groups = ["test"]
+markers = "python_version < \"3.11\""
 files = [
     {file = "testfixtures-8.3.0-py3-none-any.whl", hash = "sha256:3d1e0e0005c4d6ac2a2ab27916704c6471047f0d2f78f2e54adf20abdacc7b10"},
     {file = "testfixtures-8.3.0.tar.gz", hash = "sha256:d4c0b84af2f267610f908009b50d6f983a4e58ade22c67bab6787b5a402d59c0"},
@@ -2353,6 +2354,24 @@ files = [
 build = ["setuptools-git", "twine", "wheel"]
 docs = ["django", "furo", "sphinx", "sybil (>=6)", "twisted"]
 test = ["django", "mypy", "pytest (>=7.1)", "pytest-cov", "pytest-django", "sybil (>=6)", "twisted"]
+
+[[package]]
+name = "testfixtures"
+version = "9.0.1"
+description = "A collection of helpers and mock objects for unit tests and doc tests."
+optional = false
+python-versions = ">=3.11"
+groups = ["test"]
+markers = "python_version >= \"3.11\""
+files = [
+    {file = "testfixtures-9.0.1-py3-none-any.whl", hash = "sha256:264e86855fb3c28d82509e665be2ec3a51698c1fdad2b41734c8c4c84f55bc49"},
+    {file = "testfixtures-9.0.1.tar.gz", hash = "sha256:5d4c7e8632ae8fec046d06cdceb0973c679bbf35a6fd8924bd03cf3669477dab"},
+]
+
+[package.extras]
+build = ["setuptools-git", "twine", "wheel"]
+docs = ["django", "furo", "sphinx", "sybil (>=6)", "twisted"]
+test = ["django", "django-stubs", "mypy", "mypy-zope", "pytest (>=7.1)", "pytest-cov", "pytest-django", "sybil (>=6)", "twisted", "types-mock"]
 
 [[package]]
 name = "tomli"
