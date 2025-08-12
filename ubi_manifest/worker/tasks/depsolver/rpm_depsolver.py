@@ -16,7 +16,6 @@ from ubi_manifest.worker.pulp_queries import search_rpms
 from ubi_manifest.worker.utils import (
     create_or_criteria,
     get_n_latest_from_content,
-    is_blacklisted,
     is_requirement_resolved,
     parse_bool_deps,
 )
@@ -34,14 +33,13 @@ MAX_WORKERS = int(os.getenv("UBI_MANIFEST_DEPSOLVER_WORKERS", "8"))
 
 class Depsolver:
     """
-    Depsolver executes the process of resolving dependencies of units in
-    the given repositories.
+    Depsolver executes the process of resolving dependencies of binary/debug RPMs
+    in the given repositories.
     """
 
     def __init__(
         self,
         repos: list[DepsolverItem],
-        srpm_repos: list[Future[YumRepository]],
         modulemd_dependencies: set[str],
         modular_rpm_filenames: set[str],
         **kwargs: Any,
@@ -49,9 +47,6 @@ class Depsolver:
         self.repos: list[DepsolverItem] = repos
         self.modulemd_dependencies: set[str] = modulemd_dependencies
         self.output_set: set[UbiUnit] = set()
-        self.srpm_output_set: set[UbiUnit] = set()
-
-        self._srpm_repos: list[Future[YumRepository]] = srpm_repos
 
         self._provided_rpms: set[RpmDependency] = (
             set()
@@ -202,55 +197,6 @@ class Depsolver:
             batch.append(self._unsolved_rpms.pop())
         return self.what_provides(batch, "provides.name", repos, blacklist)
 
-    def get_source_pkgs(
-        self,
-        binary_rpms: set[UbiUnit],
-        binary_repos: list[YumRepository],
-        blacklist: list[PackageToExclude],
-    ) -> set[UbiUnit]:
-        """
-        Retrieves source packages by querying associated source repositories.
-        """
-        rpms = binary_rpms.copy()  # enables reduction of RPMs traversed over time
-
-        content_fts = []
-        for repo in binary_repos:
-            # find the source repo counterpart to the binary repo
-            srpm_repo = repo.get_source_repository().result()
-            if not srpm_repo:
-                continue
-
-            # collect RPMs associated with this repo that have a source counterpart
-            matched_rpms = {
-                rpm
-                for rpm in rpms
-                if rpm.sourcerpm and rpm.associate_source_repo_id == repo.id
-            }
-            # exclude these RPMs from future iterations
-            rpms -= matched_rpms
-
-            # submit a query for the source RPMs in this repo
-            crit = create_or_criteria(
-                ["filename"], [(rpm.sourcerpm,) for rpm in matched_rpms]
-            )
-            content_fts.append(
-                self._executor.submit(
-                    search_rpms, crit, [srpm_repo], BATCH_SIZE_RPM_SPECIFIC
-                )
-            )
-
-        out = set()
-        for content_ft in as_completed(content_fts):
-            out.update(
-                {
-                    srpm
-                    for srpm in content_ft.result()  # type: ignore [attr-defined]
-                    if not is_blacklisted(srpm, blacklist)
-                }
-            )
-
-        return out
-
     def run(self) -> None:
         """
         Method runs whole depsolving machinery:
@@ -260,7 +206,6 @@ class Depsolver:
             B. set internal state of self accordingly to the content acquired
             C. request new content that provides remaining requirements
             D. content that provides requirements is added to self.output_set
-        3. During phase 1. and 2. source RPM packages are queried for already acquired RPMS.
         """
         pulp_repos = list(
             chain.from_iterable([repo.in_pulp_repos for repo in self.repos])
@@ -322,10 +267,6 @@ class Depsolver:
             # new content needs resolving
             to_resolve = set(resolved)
 
-        self.srpm_output_set.update(
-            self.get_source_pkgs(self.output_set, pulp_repos, merged_blacklist)
-        )
-
         if not self._base_pkgs_only:
             # log warnings if depsolving failed
             deps_not_found = {req.name for req in self._required_rpms} - {
@@ -345,10 +286,9 @@ class Depsolver:
         out: dict[str, list[UbiUnit]] = {}
         # set of unique tuples (filename, repo_id)
         filename_repo_tuples: set[tuple[str, str]] = set()
-        for item in self.output_set | self.srpm_output_set:
+        for item in self.output_set:
             # deduplicate output sets, but keep identical rpms that have different repository
             # we can't easily decide which one we should keep/discard.
-            # one SRPM can be shared with more than one binary/debug RPM
             # one debug RPM may be related with more binary RPMs
             if (
                 item.filename,
