@@ -243,7 +243,7 @@ def test_depsolve_task(pulp):
 
                 # load json string stored in redis
                 data = redis.get("ubi_source_repo")
-                content = json.loads(data)
+                content = sorted(json.loads(data), key=lambda d: d["value"])
                 # source repo contain two SRPM packages, no duplicates
                 assert len(content) == 2
                 unit = content[0]
