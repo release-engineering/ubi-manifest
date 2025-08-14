@@ -2,7 +2,6 @@ import json
 import logging
 from collections import defaultdict
 from collections.abc import Iterable
-from concurrent.futures import Future
 from typing import Any
 
 import redis
@@ -15,9 +14,18 @@ from pubtools.pulplib import (
 )
 
 from ubi_manifest.worker.common import filter_whitelist
-from ubi_manifest.worker.models import DepsolverItem, ModularDepsolverItem, UbiUnit
+from ubi_manifest.worker.models import (
+    DepsolverItem,
+    ModularDepsolverItem,
+    PackageToExclude,
+    UbiUnit,
+)
 from ubi_manifest.worker.tasks.celery import app
-from ubi_manifest.worker.tasks.depsolver import Depsolver, ModularDepsolver
+from ubi_manifest.worker.tasks.depsolver import (
+    Depsolver,
+    ModularDepsolver,
+    SrpmDepsolver,
+)
 from ubi_manifest.worker.ubi_config import UbiConfigLoader, get_content_config
 from ubi_manifest.worker.utils import (
     make_pulp_client,
@@ -57,7 +65,10 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
         debug_dep_map = {}
         dep_map = {}
         mod_dep_map = {}
+        srpm_blacklist_map = {}
         in_source_rpm_repos = []
+        srpm_filenames: dict[str, set[str]] = {}  # modified in place
+
         for ubi_repo_id in ubi_repo_ids:
             repo = client.get_repository(ubi_repo_id)
             debuginfo_repo = repo.get_debug_repository()
@@ -112,6 +123,9 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
                     modulelist, repo, input_repos
                 )
 
+                # save blacklists also for srpm depsolver
+                srpm_blacklist_map[(srpm_repo.id, input_cs)] = blacklist
+
         flags = validate_depsolver_flags(depsolver_flags)
 
         # run modulemd depsolver
@@ -133,21 +147,25 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
 
         # run depsolver for binary repos
         _LOG.info("Running depsolver for RPM repos: %s", [item[0] for item in dep_map])
-        # TODO this blocks task from processing, depsolving of debuginfo packages
-        # could be moved to the Depsolver. It should lead to more async processing
-        # and better performance
         rpm_out = _run_depsolver(
             list(dep_map.values()),
             repos_map,
-            in_source_rpm_repos,
             modulemd_rpm_deps,
             modular_rpm_filenames,
             flags,
         )
 
         _merge_output_dictionary(out, rpm_out)
+        _get_srpm_filenames(client, out, srpm_filenames)
+
         if not flags.get("base_pkgs_only"):
             _update_debug_whitelist(client, out, debug_dep_map)
+
+        # save binary manifests to redis and delete the data
+        _save(out)
+        del out
+        del rpm_out
+        del modulemd_out
 
         # run depsolver for debuginfo repo
         _LOG.info(
@@ -157,22 +175,63 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
         debuginfo_out = _run_depsolver(
             list(debug_dep_map.values()),
             repos_map,
-            in_source_rpm_repos,
             modulemd_rpm_deps,
             modular_rpm_filenames,
             flags,
         )
 
-    # merge 'out' and 'debuginfo_out' dicts without overwriting any entry
-    _merge_output_dictionary(out, debuginfo_out)
+        _get_srpm_filenames(client, debuginfo_out, srpm_filenames)
 
-    # make sure that there are all ubi repositories in the 'out' dictionary set a keys
-    # repositories with empty manifest are omitted from previous processing
-    for repo_id in repos_map.values():
-        if repo_id not in out:
-            out[repo_id] = []
-    # save depsolved data to redis
-    _save(out)
+        # save debug manifests to redis and delete data
+        _save(debuginfo_out)
+        del debuginfo_out
+
+        # run depsolver for source repos
+        _LOG.info(
+            "Running depsolver for SRPM repos: %s",
+            [item[0] for item in srpm_blacklist_map],
+        )
+        srpm_out = _run_srpm_depsolver(
+            list(srpm_blacklist_map.values()),
+            srpm_filenames,
+            in_source_rpm_repos,
+            repos_map,
+        )
+        _save(srpm_out)
+
+        _ensure_all_manifests(list(repos_map.values()))
+
+
+def _get_srpm_filenames(
+    client: Client, data: dict[str, list[UbiUnit]], srpm_filenames: dict[str, set[str]]
+) -> None:
+    """
+    Gets SRPM filenames from all passed binary/debug RPMs. Resulting srpm_filenames
+    dict is modified in place, with respective rhel-source-repos as keys, so it is
+    possible to search for the SRPMs directly in the repos where they are expected.
+    """
+    for units in data.values():
+        # `data` are in the format of `"UBI binary/debug repo": [UbiUnits]`, however, we
+        # need to get their respective rhel source repos, where we can search for the SRPMs.
+        # Because some repos can have more rhel repos as population sources,
+        # we need to use the `associate_source_repo_id` attribute of the Units to get
+        # to the proper rhel binary/debug repo and from that to the source repo.
+        # `src_repo_map` is created so we do not have to query pulp in each iteration.
+        src_repo_map: dict[str, str] = {}
+        for unit in units:
+            if unit.isinstance_inner_unit(RpmUnit):
+                # if not yet found, find respective source repo
+                if not src_repo_map.get(unit.associate_source_repo_id):
+                    rhel_repo = client.get_repository(unit.associate_source_repo_id)
+                    rhel_source_repo = rhel_repo.get_source_repository()
+                    src_repo_map[unit.associate_source_repo_id] = rhel_source_repo.id
+
+                rhel_source_repo_id = src_repo_map[unit.associate_source_repo_id]
+                # populate srpm_filenames dict
+                if unit.sourcerpm:
+                    srpm_filenames.setdefault(rhel_source_repo_id, set()).add(
+                        unit.sourcerpm
+                    )
 
 
 def _update_debug_whitelist(
@@ -242,6 +301,18 @@ def _save(data: dict[str, list[UbiUnit]]) -> None:
         )
 
 
+def _ensure_all_manifests(ubi_repo_ids: list[str]) -> None:
+    """
+    Checks that a manifest was created for all ubi repositories from a depsolving group.
+    If not, create and save empty manifest for such repos.
+    """
+    redis_client = redis.from_url(app.conf.result_backend)
+
+    for repo_id in ubi_repo_ids:
+        if not redis_client.exists(repo_id):
+            redis_client.set(repo_id, json.dumps([]))
+
+
 def _get_population_sources(client: Client, repo: YumRepository) -> list[YumRepository]:
     return [client.get_repository(repo_id) for repo_id in repo.population_sources]
 
@@ -249,14 +320,12 @@ def _get_population_sources(client: Client, repo: YumRepository) -> list[YumRepo
 def _run_depsolver(
     depsolver_items: list[DepsolverItem],
     repos_map: dict[str, str],
-    in_source_rpm_repos: list[Future[YumRepository]],
     modulemd_deps: set[str],
     modular_rpm_filenames: set[str],
     flags: dict[str, Any],
 ) -> dict[str, list[UbiUnit]]:
     with Depsolver(
         depsolver_items,
-        in_source_rpm_repos,
         modulemd_deps,
         modular_rpm_filenames,
         **flags,
@@ -274,6 +343,22 @@ def _run_modulemd_depsolver(
         depsolver.run()
         out = depsolver.export()
         out["modules_out"] = remap_keys(repos_map, out["modules_out"])
+    return out
+
+
+def _run_srpm_depsolver(
+    srpm_blacklists: list[list[PackageToExclude]],
+    srpm_filenames: dict[str, set[str]],
+    input_source_repos: list[YumRepository],
+    repos_map: dict[str, str],
+) -> dict[str, Any]:
+    with SrpmDepsolver(
+        srpm_filenames, input_source_repos, srpm_blacklists
+    ) as srpm_depsolver:
+        srpm_depsolver.run()
+        exported = srpm_depsolver.export()
+        out = remap_keys(repos_map, exported)
+
     return out
 
 
