@@ -10,12 +10,10 @@ from pubtools.pulplib import YumRepository
 
 from ubi_manifest.worker.models import PackageToExclude, UbiUnit
 from ubi_manifest.worker.pulp_queries import search_rpms
-
 from ubi_manifest.worker.utils import (
     create_or_criteria,
     is_blacklisted,
 )
-
 
 MAX_WORKERS = int(os.getenv("UBI_MANIFEST_SRPM_DEPSOLVER_WORKERS", "8"))
 BATCH_SIZE_SRPM_SPECIFIC = int(

@@ -17,8 +17,8 @@ from ubi_manifest.worker.common import filter_whitelist
 from ubi_manifest.worker.models import (
     DepsolverItem,
     ModularDepsolverItem,
-    UbiUnit,
     PackageToExclude,
+    UbiUnit,
 )
 from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.tasks.depsolver import (
