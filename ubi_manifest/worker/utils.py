@@ -309,22 +309,41 @@ def remap_keys(
     return out
 
 
-def parse_blacklist_config(ubi_config: UbiConfig) -> list[PackageToExclude]:
+def parse_blacklist_config(ubi_config: UbiConfig) -> dict[str, list[PackageToExclude]]:
     """
-    Produces a list of `PackagesToExclude` based on given `UbiConfig`.
+    Parse blacklist configuration from ubi_config.
+
+    Returns:
+        Dictionary with separate lists for regular packages and SRPMs:
+        {
+            "packages_to_exclude": [...],  # Regular package blacklist
+            "srpm_packages_to_exclude": [...],  # SRPM-specific blacklist
+        }
     """
     packages_to_exclude = []
+    srpm_packages_to_exclude = []
+
     for package_pattern in ubi_config.packages.blacklist:
         globbing = package_pattern.name.endswith("*")
+        srpm_only = package_pattern.arch == "src"
+
         if globbing:
             name = package_pattern.name[:-1]
         else:
             name = package_pattern.name
         arch = None if package_pattern.arch in ("*", None) else package_pattern.arch
 
-        packages_to_exclude.append(PackageToExclude(name, globbing, arch))
+        package_entry = PackageToExclude(name, globbing, arch)
 
-    return packages_to_exclude
+        if srpm_only:
+            srpm_packages_to_exclude.append(package_entry)
+        else:
+            packages_to_exclude.append(package_entry)
+
+    return {
+        "packages_to_exclude": packages_to_exclude,
+        "srpm_packages_to_exclude": srpm_packages_to_exclude,
+    }
 
 
 def keep_n_latest_modules(modules: list[UbiUnit], n: int = 1) -> None:
