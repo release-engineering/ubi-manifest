@@ -101,19 +101,23 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
                     repo.content_set,
                     repo.ubi_config_version,
                 )
-                blacklist = parse_blacklist_config(config)
-                whitelist, debuginfo_whitelist = filter_whitelist(config, blacklist)
+                blacklist_result = parse_blacklist_config(config)
+                regular_blacklist = blacklist_result["packages_to_exclude"]
+                srpm_blacklist = blacklist_result["srpm_packages_to_exclude"]
+                whitelist, debuginfo_whitelist = filter_whitelist(
+                    config, regular_blacklist
+                )
                 depsolver_flags[(repo.id, input_cs)] = config.flags.as_dict()
 
                 dep_map[(repo.id, input_cs)] = DepsolverItem(
                     whitelist,
-                    blacklist,
+                    regular_blacklist,
                     input_repos,
                 )
 
                 debug_dep_map[(debuginfo_repo.id, input_cs)] = DepsolverItem(
                     debuginfo_whitelist,
-                    blacklist,
+                    regular_blacklist,
                     cs_debug_repo_map[input_cs],
                 )
 
@@ -124,7 +128,7 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
                 )
 
                 # save blacklists also for srpm depsolver
-                srpm_blacklist_map[(srpm_repo.id, input_cs)] = blacklist
+                srpm_blacklist_map[(srpm_repo.id, input_cs)] = srpm_blacklist
 
         flags = validate_depsolver_flags(depsolver_flags)
 

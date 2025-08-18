@@ -322,7 +322,8 @@ class ContentProcessor:
                 out_repo.ubi_config_version,
             )
 
-            current_blacklist.update(parse_blacklist_config(config))
+            blacklist_result = parse_blacklist_config(config)
+            current_blacklist.update(blacklist_result["packages_to_exclude"])
             pkg_whitelist, debuginfo_whitelist = filter_whitelist(
                 config, list(current_blacklist)
             )
