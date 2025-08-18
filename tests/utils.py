@@ -130,6 +130,12 @@ class MockedRedis:
             raise ConnectionError("Connection refused.")
         return True
 
+    def exists(self, key: str) -> bool:
+        keys = self.keys()
+        if key not in keys:
+            return False
+        return True
+
 
 def rpmdeps_from_names(*names):
     return {RpmDependency(name=name) for name in names}
