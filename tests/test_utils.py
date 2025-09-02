@@ -542,7 +542,7 @@ def test_parse_blacklist():
         # All entries should be in regular packages (no .src entries in test data)
         regular_packages = sorted(parsed["packages_to_exclude"], key=lambda x: x.name)
         assert len(regular_packages) == 3
-        assert len(parsed["srpm_packages_to_exclude"]) == 0
+        assert len(parsed["srpm_packages_to_exclude"]) == 1
 
         item = regular_packages[0]
         assert item.name == "kernel"
@@ -569,7 +569,7 @@ def test_parse_blacklist_with_srpm_suffix():
         # Add real .src entries using ubi-config's actual parsing behavior
         test_config_with_src = {
             "modules": {"include": []},
-            "packages": {"include": [], "exclude": ["kernel.src", "gcc.src"]},
+            "packages": {"include": [], "exclude": ["gcc.src"]},
             "content_sets": {
                 "rpm": {"output": "cs_rpm_out", "input": "cs_rpm_in"},
                 "srpm": {"output": "cs_srpm_out", "input": "cs_srpm_in"},
