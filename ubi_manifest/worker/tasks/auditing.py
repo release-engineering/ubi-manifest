@@ -169,6 +169,24 @@ class NonModularAuditor:
                     whitelisted_pkg_name,
                 )
 
+    def verify_sources(self, src_repo_content: list[UbiUnit]) -> None:
+        """
+        Verifies that all output RPMs have matching SRPMs in the source repo.
+
+        Logs warnings if any packages are missing from the source repo.
+        """
+        for out_unit in self.arranged_out_units.values():  # type: ignore
+            in_src_repo = any(
+                src_unit.filename == out_unit.sourcerpm for src_unit in src_repo_content
+            )
+
+            if not in_src_repo:
+                _LOG.warning(
+                    "SRPM %s for RPM: %s is missing in the source repository",
+                    out_unit.sourcerpm,
+                    out_unit.name,
+                )
+
 
 class ContentProcessor:
     """
@@ -212,7 +230,7 @@ class ContentProcessor:
 
     def process_and_audit_bundle(self) -> None:
         """
-        Processes a bundle of UBI repos (bin, source, debug) in sequence.
+        Processes a bundle of UBI repos (bin, debug, source) in sequence.
         """
         _LOG.info(
             "Auditing bundle of UBI repos [%s, %s, %s]...\n",
@@ -220,15 +238,10 @@ class ContentProcessor:
             self.out_repo_bundle["debug_repo"].id,
             self.out_repo_bundle["source_repo"].id,
         )
-        for repo_type in ["bin_repo", "source_repo", "debug_repo"]:
+        src_repo_content = self._fetch_src_repo_content()
+        for repo_type in ["bin_repo", "debug_repo", "source_repo"]:
             out_repo = self.out_repo_bundle[repo_type]
             in_repos = self.in_repos_bundle.get(f"{repo_type}s", [])
-            if repo_type == "source_repo":
-                _LOG.warning(
-                    "Skipping auditing of source repo '%s': Not implemented yet.\n",
-                    out_repo.id,
-                )
-                continue
             if repo_type == "bin_repo":
                 _LOG.info(
                     "Processing and auditing UBI repo '%s' with modular content...",
@@ -240,13 +253,16 @@ class ContentProcessor:
             else:
                 _LOG.info("Processing and auditing UBI repo '%s'...\n", out_repo.id)
             self.nonmodular_auditor.out_repo_id = out_repo.id
-            self._process_and_audit_type(out_repo, in_repos, repo_type)
+            self._process_and_audit_type(
+                out_repo, in_repos, repo_type, src_repo_content
+            )
 
     def _process_and_audit_type(
         self,
         out_repo: YumRepository,
         in_repos: list[YumRepository],
         repo_type: str,
+        src_repo_content: list[UbiUnit],
     ) -> None:
         """
         Processes and audits the repository content.
@@ -259,6 +275,23 @@ class ContentProcessor:
         self._fetch_in_repos_contents(in_repos)
         self.nonmodular_auditor.validate_versions()
         self.nonmodular_auditor.check_content_rules()
+        if repo_type != "source_repo":
+            self.nonmodular_auditor.verify_sources(src_repo_content)
+
+    def _fetch_src_repo_content(self) -> list[UbiUnit]:
+        """
+        Fetches the content of the output src repository.
+
+        Returns a list of the src repository UbiUnits
+        """
+        src_repo = self.out_repo_bundle["source_repo"]
+        all_srpm_units: set[UbiUnit] = search_rpms(
+            [Criteria.true()], [src_repo], BATCH_SIZE_RPM
+        ).result()
+        non_modular_srpms = get_n_latest_from_content(
+            all_srpm_units, modular_rpms=self.all_modular_filenames
+        )
+        return non_modular_srpms
 
     def _fetch_out_repo_content(self, out_repo: YumRepository) -> None:
         """
@@ -323,13 +356,17 @@ class ContentProcessor:
             )
 
             blacklist_result = parse_blacklist_config(config)
-            current_blacklist.update(blacklist_result["packages_to_exclude"])
+            if repo_type == "source_repo":
+                current_blacklist.update(blacklist_result["srpm_packages_to_exclude"])
+            else:
+                current_blacklist.update(blacklist_result["packages_to_exclude"])
+
             pkg_whitelist, debuginfo_whitelist = filter_whitelist(
                 config, list(current_blacklist)
             )
             if repo_type == "debug_repo":
                 current_whitelist.update(debuginfo_whitelist)
-            else:
+            elif repo_type == "bin_repo":
                 current_whitelist.update(pkg_whitelist)
 
         self.nonmodular_auditor.whitelist = current_whitelist
