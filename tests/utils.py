@@ -64,7 +64,7 @@ class MockLoader:
                     "bash.*",
                     "neovim.*",
                 ],
-                "exclude": ["package-name*.*", "kernel", "kernel.x86_64"],
+                "exclude": ["package-name*.*", "kernel", "kernel.x86_64", "kernel.src"],
             },
             "content_sets": {
                 "rpm": {"output": "cs_rpm_out", "input": "cs_rpm_in"},
@@ -94,7 +94,7 @@ class MockLoader:
                     "neovim.*",
                     "bash.*",
                 ],
-                "exclude": ["package-name*.*", "kernel", "kernel.x86_64"],
+                "exclude": ["package-name*.*", "kernel", "kernel.x86_64", "kernel.src"],
             },
             "content_sets": {
                 "rpm": {"output": "cs_rpm_out", "input": "cs_rpm_in_other"},
