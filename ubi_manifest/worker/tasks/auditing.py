@@ -21,6 +21,7 @@ from ubi_manifest.worker.utils import (
     get_n_latest_from_content,
     is_blacklisted,
     parse_blacklist_config,
+    split_filename,
 )
 
 _LOG = logging.getLogger(__name__)
@@ -50,23 +51,26 @@ class NonModularAuditor:
     Attributes:
         out_repo_id (str): The ID of the output repository.
         whitelist (set[str]): A set of whitelisted package names.
-        blacklist (set[PackageToExclude]): A set of packages to exclude.
+        blacklists (dict[str, set[PackageToExclude]]): Dictionary containing the srpm and rpm packages to exclude.
         arranged_in_units (dict[tuple[str, str], UbiUnit]): Input units to be audited.
         arranged_out_units (dict[tuple[str, str], UbiUnit]): Output units to be audited.
+        src_units (list[UbiUnit]): Units in the output source repo.
     """
 
     def __init__(
         self,
         out_repo_id: Optional[str] = None,
         whitelist: Optional[set[str]] = None,
-        blacklist: Optional[set[PackageToExclude]] = None,
+        blacklists: Optional[dict[str, set[PackageToExclude]]] = None,
         arranged_in_units: Optional[dict[tuple[str, str], UbiUnit]] = None,
         arranged_out_units: Optional[dict[tuple[str, str], UbiUnit]] = None,
+        src_units: Optional[list[UbiUnit]] = None,
     ) -> None:
         self.whitelist = whitelist
-        self.blacklist = blacklist
+        self.blacklists = blacklists
         self.arranged_in_units = arranged_in_units
         self.arranged_out_units = arranged_out_units
+        self.src_units = src_units
         self.out_repo_id = out_repo_id
 
     def validate_versions(self) -> None:
@@ -100,26 +104,25 @@ class NonModularAuditor:
             ):  # type: ignore
                 log_warning((out_unit.name, out_evr, in_evr), name_arch[1])
 
-    def check_content_rules(self) -> None:
-        """
-        Checks the content rules against the whitelist and blacklist.
-
-        Calls the methods to verify the blacklist and whitelist.
-        """
-        self._verify_blacklist()
-        self._verify_whitelist()
-
-    def _verify_blacklist(self) -> None:
+    def verify_blacklist(self, is_src_repo: bool = False) -> None:
         """
         Verifies that no blacklisted packages are present in the output units.
 
         Logs a warning if any blacklisted packages are found.
         """
-        blacklisted_pkgs = {
-            u.name
-            for u in self.arranged_out_units.values()  # type: ignore
-            if is_blacklisted(u, list(self.blacklist))  # type: ignore
-        }
+        if is_src_repo:
+            blacklisted_pkgs = {
+                u.name
+                for u in self.src_units  # type: ignore
+                if is_blacklisted(u, list(self.blacklists["srpm_packages_to_exclude"]))  # type: ignore
+            }
+
+        else:
+            blacklisted_pkgs = {
+                u.name
+                for u in self.arranged_out_units.values()  # type: ignore
+                if is_blacklisted(u, list(self.blacklists["packages_to_exclude"]))  # type: ignore
+            }
 
         if blacklisted_pkgs:
             _LOG.warning(
@@ -128,7 +131,7 @@ class NonModularAuditor:
                 "\n\t".join(sorted(blacklisted_pkgs)),
             )
 
-    def _verify_whitelist(self) -> None:
+    def verify_whitelist(self) -> None:
         """
         Verifies that whitelisted packages are present in the input and output units.
 
@@ -168,6 +171,39 @@ class NonModularAuditor:
                     self.out_repo_id,
                     whitelisted_pkg_name,
                 )
+
+    def verify_sources(self) -> None:
+        """
+        Verifies that all output RPMs have matching SRPMs in the source repo.
+
+        Logs warnings if any packages are missing from the source repo.
+        """
+        for out_unit in self.arranged_out_units.values():  # type: ignore
+            is_rpm_blacklisted = is_blacklisted(
+                out_unit, list(self.blacklists["packages_to_exclude"])  # type: ignore
+            )
+            if is_rpm_blacklisted:
+                continue
+
+            is_srpm_blacklisted = any(
+                blacklisted_package.name == split_filename(out_unit.sourcerpm)[0]
+                for blacklisted_package in self.blacklists["srpm_packages_to_exclude"]  # type: ignore
+            )
+            if is_srpm_blacklisted:
+                continue
+
+            in_src_repo = any(
+                src_unit.filename == out_unit.sourcerpm
+                for src_unit in self.src_units  # type: ignore
+            )
+            if in_src_repo:
+                continue
+
+            _LOG.warning(
+                "SRPM '%s' for RPM '%s' is missing in the source repository",
+                out_unit.sourcerpm,
+                out_unit.name,
+            )
 
 
 class ContentProcessor:
@@ -212,7 +248,7 @@ class ContentProcessor:
 
     def process_and_audit_bundle(self) -> None:
         """
-        Processes a bundle of UBI repos (bin, source, debug) in sequence.
+        Processes a bundle of UBI repos (bin, debug, source) in sequence.
         """
         _LOG.info(
             "Auditing bundle of UBI repos [%s, %s, %s]...\n",
@@ -220,15 +256,10 @@ class ContentProcessor:
             self.out_repo_bundle["debug_repo"].id,
             self.out_repo_bundle["source_repo"].id,
         )
-        for repo_type in ["bin_repo", "source_repo", "debug_repo"]:
+        self._fetch_src_repo_content()
+        for repo_type in ["bin_repo", "debug_repo", "source_repo"]:
             out_repo = self.out_repo_bundle[repo_type]
             in_repos = self.in_repos_bundle.get(f"{repo_type}s", [])
-            if repo_type == "source_repo":
-                _LOG.warning(
-                    "Skipping auditing of source repo '%s': Not implemented yet.\n",
-                    out_repo.id,
-                )
-                continue
             if repo_type == "bin_repo":
                 _LOG.info(
                     "Processing and auditing UBI repo '%s' with modular content...",
@@ -255,10 +286,32 @@ class ContentProcessor:
         whitelist and blacklist, and performs validation and checks.
         """
         self._set_whitelist_blacklist(out_repo, in_repos, repo_type)
-        self._fetch_out_repo_content(out_repo)
-        self._fetch_in_repos_contents(in_repos)
-        self.nonmodular_auditor.validate_versions()
-        self.nonmodular_auditor.check_content_rules()
+        if repo_type != "source_repo":
+            self._fetch_out_repo_content(out_repo)
+            self._fetch_in_repos_contents(in_repos)
+            self.nonmodular_auditor.validate_versions()
+            self.nonmodular_auditor.verify_whitelist()
+            self.nonmodular_auditor.verify_blacklist()
+            self.nonmodular_auditor.verify_sources()
+        else:
+            self.nonmodular_auditor.verify_blacklist(is_src_repo=True)
+
+    def _fetch_src_repo_content(self) -> None:
+        """
+        Fetches the content of the output src repository.
+
+        Returns a list of the src repository UbiUnits
+        """
+        src_repo = self.out_repo_bundle["source_repo"]
+        all_srpm_units: set[UbiUnit] = search_rpms(
+            [Criteria.true()], [src_repo], BATCH_SIZE_RPM
+        ).result()
+
+        self.nonmodular_auditor.src_units = [
+            unit
+            for unit in all_srpm_units
+            if unit.filename not in self.all_modular_filenames
+        ]
 
     def _fetch_out_repo_content(self, out_repo: YumRepository) -> None:
         """
@@ -313,7 +366,10 @@ class ContentProcessor:
         Updates the auditor's whitelist and blacklist attributes.
         """
         current_whitelist = set()
-        current_blacklist = set()
+        current_blacklists: dict[str, set[PackageToExclude]] = {
+            "packages_to_exclude": set(),
+            "srpm_packages_to_exclude": set(),
+        }
         for in_repo in in_repos:
             config = get_content_config(
                 self.config_loader,
@@ -323,14 +379,16 @@ class ContentProcessor:
             )
 
             blacklist_result = parse_blacklist_config(config)
-            current_blacklist.update(blacklist_result["packages_to_exclude"])
+            for list_name, blacklist in blacklist_result.items():
+                current_blacklists[list_name].update(blacklist)
+
             pkg_whitelist, debuginfo_whitelist = filter_whitelist(
-                config, list(current_blacklist)
+                config, list(current_blacklists["packages_to_exclude"])
             )
             if repo_type == "debug_repo":
                 current_whitelist.update(debuginfo_whitelist)
-            else:
+            elif repo_type == "bin_repo":
                 current_whitelist.update(pkg_whitelist)
 
         self.nonmodular_auditor.whitelist = current_whitelist
-        self.nonmodular_auditor.blacklist = current_blacklist
+        self.nonmodular_auditor.blacklists = current_blacklists

@@ -539,10 +539,9 @@ def test_parse_blacklist():
         assert "packages_to_exclude" in parsed
         assert "srpm_packages_to_exclude" in parsed
 
-        # All entries should be in regular packages (no .src entries in test data)
+        # Check that all "packages_to_exclude" entries are regular packages
         regular_packages = sorted(parsed["packages_to_exclude"], key=lambda x: x.name)
         assert len(regular_packages) == 3
-        assert len(parsed["srpm_packages_to_exclude"]) == 0
 
         item = regular_packages[0]
         assert item.name == "kernel"
@@ -559,48 +558,19 @@ def test_parse_blacklist():
         assert item.globbing is True
         assert item.arch is None
 
+        # Check that all "srpm_packages_to_exclude" entries are .src packages
+        srpm_packages = sorted(parsed["srpm_packages_to_exclude"], key=lambda x: x.name)
+        assert len(srpm_packages) == 2
 
-def test_parse_blacklist_with_srpm_suffix():
-    """Test parse_blacklist_config with .src suffix handling"""
-    with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
-        loader = UbiConfigLoader("https://foo.bar.com/some-repo.git")
-        config = loader.get_config("cs_rpm_in", "cs_rpm_out", "8")
+        item = srpm_packages[0]
+        assert item.name == "gcc"
+        assert item.globbing is False
+        assert item.arch == "src"
 
-        # Add real .src entries using ubi-config's actual parsing behavior
-        test_config_with_src = {
-            "modules": {"include": []},
-            "packages": {"include": [], "exclude": ["kernel.src", "gcc.src"]},
-            "content_sets": {
-                "rpm": {"output": "cs_rpm_out", "input": "cs_rpm_in"},
-                "srpm": {"output": "cs_srpm_out", "input": "cs_srpm_in"},
-                "debuginfo": {"output": "cs_debug_out", "input": "cs_debug_in"},
-            },
-            "arches": ["x86_64", "src"],
-        }
-
-        temp_config = ubiconfig.UbiConfig.load_from_dict(
-            test_config_with_src, "test_file", "8"
-        )
-        config.packages.blacklist.extend(temp_config.packages.blacklist)
-
-        parsed = parse_blacklist_config(config)
-
-        # Check the SRPM entries in the separate list
-        srpm_entries = parsed["srpm_packages_to_exclude"]
-        regular_entries = parsed["packages_to_exclude"]
-
-        assert len(srpm_entries) == 2
-        assert len(regular_entries) > 0  # Should have existing entries
-
-        kernel_srpm = next(item for item in srpm_entries if item.name == "kernel")
-        assert kernel_srpm.name == "kernel"
-        assert kernel_srpm.globbing is False
-        assert kernel_srpm.arch == "src"
-
-        gcc_srpm = next(item for item in srpm_entries if item.name == "gcc")
-        assert gcc_srpm.name == "gcc"
-        assert gcc_srpm.globbing is False
-        assert gcc_srpm.arch == "src"
+        item = srpm_packages[1]
+        assert item.name == "kernel"
+        assert item.globbing is False
+        assert item.arch == "src"
 
 
 def test_get_modulemd_output_set():

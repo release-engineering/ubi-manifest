@@ -18,6 +18,12 @@ def test_pipeline(pulp, caplog):
         repo_id="rhel_bin_repo-1",
         relative_url="/location/rhel_repo-1/os",
     )
+    distributor_rhel_source_repo_1 = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="rhel_source_repo-1",
+        relative_url="/location/rhel_repo-1/source/SRPMS",
+    )
     distributor_rhel_debug_repo_1 = Distributor(
         id="yum_distributor",
         type_id="yum_distributor",
@@ -31,6 +37,14 @@ def test_pipeline(pulp, caplog):
         relative_url=distributor_rhel_binary_repo_1.relative_url,
         distributors=[distributor_rhel_binary_repo_1],
         arch="x86_64",
+    )
+    rhel_source_repo_1 = create_and_insert_repo(
+        id=distributor_rhel_source_repo_1.repo_id,
+        pulp=pulp,
+        content_set="cs_srpm_in",
+        relative_url=distributor_rhel_source_repo_1.relative_url,
+        distributors=[distributor_rhel_source_repo_1],
+        arch="src",
     )
     rhel_debug_repo_1 = create_and_insert_repo(
         id=distributor_rhel_debug_repo_1.repo_id,
@@ -130,6 +144,16 @@ def test_pipeline(pulp, caplog):
         sourcerpm="gcc_src-1-0.src.rpm",
         filename="gcc-10.200.x86_64.rpm",
     )
+
+    gcc_srpm_outdated = RpmUnit(
+        name="gcc",
+        version="8.2.1",  # outdated
+        release="200",
+        epoch="1",
+        arch="src",
+        filename="gcc_src-1-0.src.rpm",
+    )
+
     bind_rpm = RpmUnit(
         name="bind",
         version="10",
@@ -147,6 +171,7 @@ def test_pipeline(pulp, caplog):
         version="1",
         release="2",
         arch="x86_64",
+        sourcerpm="pkg-1-2.src.rpm",
     )
 
     blacklisted_abc_rpm = RpmUnit(
@@ -154,6 +179,30 @@ def test_pipeline(pulp, caplog):
         version="1",
         release="2",
         arch="x86_64",
+        sourcerpm="package-name-abc-1-2.src.rpm",
+    )
+
+    input_only_srpm = RpmUnit(
+        name="httpd",
+        version="2.457",
+        release="11.el9",
+        arch="src",
+    )
+
+    allowed_kernel_rpm = RpmUnit(
+        name="allowed-kernel",
+        version="1",
+        release="2",
+        arch="x86-64",
+        sourcerpm="kernel-1-2.src.rpm",
+    )
+
+    blacklisted_kernel_srpm = RpmUnit(
+        name="kernel",
+        version="1",
+        release="2",
+        arch="src",
+        filename="kernel-1-2.src.rpm",
     )
 
     output_only_rpm = RpmUnit(
@@ -161,19 +210,30 @@ def test_pipeline(pulp, caplog):
         version="0.10.4",
         release="1.fc41",
         arch="x86_64",
+        sourcerpm="neovim-0.10.4-1.fc41.src.rpm",
     )
+    output_only_srpm = RpmUnit(
+        name="neovim",
+        version="0.10.4",
+        release="1.fc41",
+        filename="neovim-0.10.4-1.fc41.src.rpm",
+        arch="src",
+    )
+
     input_only_rpm = RpmUnit(
         name="bash",
         version="5.0.7",
         release="1.fc30",
         arch="x86_64",
         filename="bash-5.0.7.1.fc30.x86_64.rpm",
+        sourcerpm="bash-5.0.7-1.fc30.src.rpm",
     )
     bash_debuginfo_rpm = RpmUnit(
         name="bash-debuginfo.foo",
         version="5.0.7",
         release="1.fc30",
         arch="x86_64",
+        sourcerpm="bash-5.0.7-1.fc30.src.rpm",
     )
     bash_noarch = RpmUnit(
         name="bash-0",
@@ -181,6 +241,7 @@ def test_pipeline(pulp, caplog):
         release="1.module+el8+2240+23e6f3c3",
         arch="noarch",
         filename="bash-0:5.0.7-1.module+el8+2240+23e6f3c3.noarch",
+        sourcerpm="bash-5.0.7-1.fc30.src.rpm",
     )
 
     pulp.insert_units(
@@ -195,10 +256,18 @@ def test_pipeline(pulp, caplog):
             blacklisted_abc_rpm,
         ],
     )
+    pulp.insert_units(rhel_source_repo_1, [blacklisted_kernel_srpm, input_only_srpm])
 
     pulp.insert_units(
         ubi_binary_repo_1,
-        [output_only_rpm, gcc_rpm_outdated, bind_rpm, module_1, bash_noarch],
+        [
+            output_only_rpm,
+            gcc_rpm_outdated,
+            bind_rpm,
+            module_1,
+            bash_noarch,
+            allowed_kernel_rpm,
+        ],
     )
     pulp.insert_units(
         ubi_debug_repo_1,
@@ -207,6 +276,10 @@ def test_pipeline(pulp, caplog):
             bash_debuginfo_rpm,
             blacklisted_abc_rpm,
         ],
+    )
+    pulp.insert_units(
+        ubi_source_repo_1,
+        [blacklisted_kernel_srpm, output_only_srpm, gcc_srpm_outdated],
     )
 
     with mock.patch("ubi_manifest.worker.utils.Client") as client:
@@ -222,14 +295,19 @@ def test_pipeline(pulp, caplog):
                 f"[{ubi_binary_repo_1.id}] UBI rpm of {ubi_binary_repo_1.arch} 'gcc' is outdated (current: ('0', '8.2.1', '200'), latest: ('0', '9.0.1', '200'))",
                 f"[{ubi_binary_repo_1.id}] Whitelisted package 'neovim' found in out repo but not in any input repos!",
                 f"[{ubi_binary_repo_1.id}] Whitelisted package 'bash' found in input repos but not in output repo!",
+                "SRPM 'bind_src-1-0.src.rpm' for RPM 'bind' is missing in the source repository",
+                "SRPM 'bash-5.0.7-1.fc30.src.rpm' for RPM 'bash-0' is missing in the source repository",
             ]
             expected_ubi_source_repo_1 = [
-                f"Skipping auditing of source repo '{ubi_source_repo_1.id}': Not implemented yet."
+                f"Processing and auditing UBI repo '{ubi_source_repo_1.id}'...",
+                f"[{ubi_source_repo_1.id}] blacklisted content found in output repository;\n\tgcc\n\tkernel",
             ]
             expected_ubi_debug_repo_1 = [
                 f"Processing and auditing UBI repo '{ubi_debug_repo_1.id}'...",
                 f"[{ubi_debug_repo_1.id}] blacklisted content found in output repository;\n\tpackage-name-abc",
                 f"[{ubi_debug_repo_1.id}] Whitelisted package 'pkg-debuginfo' not found in any input or output repositories.",
+                "SRPM 'bash-5.0.7-1.fc30.src.rpm' for RPM 'bash-debuginfo.foo' is missing in the source repository",
+                "SRPM 'pkg-1-2.src.rpm' for RPM 'pkg-debuginfo.foo' is missing in the source repository",
             ]
 
             expected_logs = (
@@ -245,6 +323,14 @@ def test_pipeline(pulp, caplog):
 
             for log in expected_logs:
                 assert log in caplog.text
+
+            unexpected_logs = [
+                "SRPM 'kernel-1-2.src.rpm' for RPM 'allowed-kernel' is missing in the source repository",
+                "SRPM 'package-name-abc-1-2.src.rpm' for RPM 'package-name-abc' is missing in the source repository",
+            ]
+
+            for log in unexpected_logs:
+                assert log not in caplog.text
 
 
 def test_pipeline_with_invalid_repo(pulp):
