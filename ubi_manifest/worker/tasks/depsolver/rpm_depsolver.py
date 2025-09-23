@@ -133,7 +133,10 @@ class Depsolver:
 
             for item in rpm.provides:
                 # add to global provides
-                self._provided_rpms.add(item)
+                if item.name.startswith("/"):
+                    self._provided_files.add(item)
+                else:
+                    self._provided_rpms.add(item)
 
             for filename in rpm.files or []:
                 self._provided_files.add(RpmDependency(name=filename))

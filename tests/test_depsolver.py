@@ -82,7 +82,7 @@ def test_extract_and_resolve():
     depsolver._required_rpms = rpmdeps_from_names("pkg_a", "pkg_b")
     depsolver._provided_rpms = rpmdeps_from_names("pkg_c", "pkg_d")
     depsolver._unsolved_rpms = rpmdeps_from_names("pkg_a", "pkg_b")
-    depsolver._required_files = {"/some/file"}
+    depsolver._required_files = {"/some/file", "/other/file"}
 
     unit = RpmUnit(
         name="test",
@@ -90,7 +90,11 @@ def test_extract_and_resolve():
         release="200",
         epoch="1",
         arch="x86_64",
-        provides=[RpmDependency(name="pkg_e"), RpmDependency(name="pkg_b")],
+        provides=[
+            RpmDependency(name="pkg_e"),
+            RpmDependency(name="pkg_b"),
+            RpmDependency(name="/other/file"),
+        ],
         requires=[RpmDependency(name="pkg_f"), RpmDependency(name="(pkg_g if pkg_h)")],
         files=["/some/file"],
     )
