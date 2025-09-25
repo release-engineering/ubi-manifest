@@ -339,7 +339,8 @@ class Depsolver:
 
             # Divide missing dependencies blacklisted and all others
             if any((_is_blacklisted_by_rule(item, rule) for rule in merged_blacklist)):
-                _LOG.warning(
+                # This is expected, so logging is only at the info level
+                _LOG.info(
                     "Failed depsolving: %s is blacklisted. These rpms depend on it %s",
                     item,
                     sorted(depending_rpms),
