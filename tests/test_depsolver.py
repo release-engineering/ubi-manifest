@@ -322,13 +322,13 @@ def test_run(pulp):
                 ),
                 (
                     "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
-                    "WARNING",
+                    "INFO",
                     "Failed depsolving: lib_exclude is blacklisted. These rpms depend on it"
                     " ['lib-x-100-200.x86_64.rpm', 'lib-y-100-200.x86_64.rpm']",
                 ),
                 (
                     "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
-                    "WARNING",
+                    "INFO",
                     "Failed depsolving: blacklisted-package is blacklisted."
                     " These rpms depend on it ['lib-y-100-200.x86_64.rpm']",
                 ),
