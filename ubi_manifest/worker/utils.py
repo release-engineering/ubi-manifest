@@ -211,7 +211,7 @@ def is_requirement_resolved(req: RpmDependency, provider: RpmDependency) -> Any:
         req_evr = (req.epoch, req.version, req.release)
         prov_evr = (provider.epoch, provider.version, provider.release)
         # compare provider with requirement
-        out = RELATION_CMP_MAP[req.flags](prov_evr, req_evr)  # type: ignore [no-untyped-call]
+        out = RELATION_CMP_MAP[req.flags](prov_evr, req_evr)
 
     else:
         # without flags we just compare names

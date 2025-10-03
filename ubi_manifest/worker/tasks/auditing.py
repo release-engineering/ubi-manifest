@@ -101,7 +101,7 @@ class NonModularAuditor:
             if RELATION_CMP_MAP["LT"](
                 out_evr,
                 in_evr,
-            ):  # type: ignore
+            ):
                 log_warning((out_unit.name, out_evr, in_evr), name_arch[1])
 
     def verify_blacklist(self, is_src_repo: bool = False) -> None:
