@@ -138,7 +138,7 @@ class Depsolver:
                 else:
                     self._provided_rpms.add(item)
 
-            for filename in rpm.files or []:
+            for filename in rpm.get_files():
                 self._provided_files.add(RpmDependency(name=filename))
 
         # update global requires
