@@ -47,7 +47,7 @@ optional = true
 black = "25.9.0"
 pre-commit = "4.3.0"
 mypy = "1.18.2"
-pylint = "3.3.9"
+pylint = "<4.0.0"
 pytest-cov = "7.0.0"
 uvicorn = {version = "0.37.0", extras = ["standard"]}
 
