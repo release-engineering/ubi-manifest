@@ -41,17 +41,6 @@ def validate_content_config(_: AttrsInstance, attr: Any, value: dict[str, str]) 
             )
 
 
-def validate_repo_groups(
-    _: AttrsInstance, attr: Any, value: dict[str, list[str]]
-) -> None:
-    for group in value.values():
-        for repo in group:
-            if not re.match(REPO_ID_REGEX, repo):
-                raise ValueError(
-                    f"Repos in '{attr.name}' must match regex '{REPO_ID_REGEX}'. '{repo}' doesn't."
-                )
-
-
 @define
 class Config:
     pulp_url: str = field(
@@ -74,9 +63,6 @@ class Config:
     content_config: dict[str, str] = field(
         validator=validate_content_config,
         default={"ubi": "url_or_dir_1", "client-tools": "url_or_dir_2"},
-    )
-    allowed_ubi_repo_groups: dict[str, list[str]] = field(
-        validator=validate_repo_groups, default={}
     )
     imports: list[str] = [
         "ubi_manifest.worker.tasks.depsolve",
@@ -126,10 +112,9 @@ def make_config(celery_app: celery.Celery) -> None:
     config_from_file.read(config_file)
     try:
         conf_dict: dict[str, Any] = dict(config_from_file["CONFIG"])
-        for conf_field in ("allowed_ubi_repo_groups", "content_config"):
-            conf_item_str = config_from_file["CONFIG"].pop(conf_field, "{}")
-            conf_item = json.loads(re.sub(r"[\s]+", "", conf_item_str))
-            conf_dict[conf_field] = conf_item
+        conf_item_str = config_from_file["CONFIG"].pop("content_config", "{}")
+        conf_item = json.loads(re.sub(r"[\s]+", "", conf_item_str))
+        conf_dict["content_config"] = conf_item
 
         config = Config(**conf_dict)
     except KeyError:

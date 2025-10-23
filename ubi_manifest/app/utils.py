@@ -36,21 +36,14 @@ def get_items_for_depsolving(
     items which are then used for creation of depsolving tasks.
     """
     config_url = app_conf.content_config[repo_class]
-    if app_conf.allowed_ubi_repo_groups:
-        items = get_items_from_groups(
-            repo_ids, app_conf.allowed_ubi_repo_groups, config_url
-        )
-    else:
-        with make_pulp_client(app_conf) as client:
-            configs = get_configs(config_url)
-            base_pkg_only = check_and_get_flag(configs, config_url)
-            if base_pkg_only:
-                items = get_items_not_full_depsolving(
-                    client, configs, repo_ids, config_url
-                )
-            else:
-                repo_groups = get_repo_groups(client, configs)
-                items = get_items_from_groups(repo_ids, repo_groups, config_url)
+    with make_pulp_client(app_conf) as client:
+        configs = get_configs(config_url)
+        base_pkg_only = check_and_get_flag(configs, config_url)
+        if base_pkg_only:
+            items = get_items_not_full_depsolving(client, configs, repo_ids, config_url)
+        else:
+            repo_groups = get_repo_groups(client, configs)
+            items = get_items_from_groups(repo_ids, repo_groups, config_url)
 
     _LOG.info("Determined items for depsolving: %s", items)
     return items

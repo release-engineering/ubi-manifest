@@ -22,22 +22,6 @@ def test_get_repo_classes(repo_ids, expected_result):
     assert result == expected_result
 
 
-@patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@patch("ubi_manifest.worker.utils.Client")
-def test_get_items_for_depsolving_default_groups(get_loader, pulp_client):
-    app_conf = Mock(
-        content_config={"ubi": "https://ubi", "client-tools": "https://ct"},
-        allowed_ubi_repo_groups={"ubi8:aarch64": ["ubi_repo1", "ubi_repo2"]},
-    )
-    result = utils.get_items_for_depsolving(app_conf, ["ubi_repo1"], "ubi")
-
-    assert result == [{"repo_group": ["ubi_repo1", "ubi_repo2"], "url": "https://ubi"}]
-    # Since the default allowed_repo_groups were defined in the app config, we do not need
-    # to call pulp or load any configs for the determination of the repo groups.
-    pulp_client.assert_not_called()
-    get_loader.assert_not_called()
-
-
 def test_get_items_from_groups():
     repo_groups = {
         "7-aarch64": {"ubi_repo1", "ubi_repo2", "ubi_repo3"},

@@ -28,7 +28,6 @@ def test_make_config():
             "ubi": "https://gitlab.foo.bar.com/ubi-config",
             "client-tools": "https://gitlab.foo.bar.com/ct-config",
         }
-        assert celery_app.conf["allowed_ubi_repo_groups"] == {}
 
         # check properly converted fields to int types
         assert celery_app.conf["publish_limit"] == 2
@@ -41,7 +40,6 @@ def test_make_config():
         ("pulp_username", "fo o"),
         ("content_config", '{"ubi": "https://ubi..!!"}'),
         ("content_config", '{"ubi??": "https://ubi"}'),
-        ("allowed_ubi_repo_groups", '{"ubiX:test": ["repo??"]}'),
     ],
 )
 def test_config_wrong_attributes(option, value):
