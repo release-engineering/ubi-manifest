@@ -39,10 +39,7 @@ def content_audit_task() -> None:
     This task checks that all available content is up-to-date, that whitelisted
     content is present, and that blacklisted content is absent.
     """
-    config_loaders_map = {
-        repo_class: UbiConfigLoader(url)
-        for repo_class, url in app.conf.content_config.items()
-    }
+    config_loaders = [UbiConfigLoader(url) for url in app.conf.content_config.values()]
 
     with make_pulp_client(app.conf) as client:
         out_repos_bundles = fetch_ubi_repos_bundles(client)
@@ -64,17 +61,24 @@ def content_audit_task() -> None:
                 "debug_repos": list(client.search_repository(debug_criterion).result()),
             }
 
-            current_loader = next(
-                (
-                    loader
-                    for repo_class, loader in config_loaders_map.items()
-                    if repo_class in bin_repo_id
-                ),
-                None,
-            )
+            # Find the config loader that has configs for this repo bundle
+            current_loader = None
+            for loader in config_loaders:
+                # Check if any config in this loader matches the binary repo
+                for config in loader.all_config:
+                    if hasattr(config.content_sets, "rpm"):
+                        # Try to match the config based on content set
+                        out_cs = out_repo_bundle["bin_repo"].content_set
+                        if out_cs == config.content_sets.rpm.output:
+                            current_loader = loader
+                            break
+                if current_loader:
+                    break
+
             if not current_loader:
                 raise ValueError(
-                    f"Repository {bin_repo_id} is set for ubi_population but has unexpected id."
+                    f"Repository {bin_repo_id} is set for ubi_population "
+                    "but no matching config for the repo was found."
                 )
 
             content_processor = ContentProcessor(

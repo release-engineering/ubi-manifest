@@ -14,39 +14,35 @@ class FlagInconsistencyError(ValueError):
     pass
 
 
-def get_repo_classes(content_config: dict[str, str], repo_ids: list[str]) -> list[str]:
-    """
-    Returns repo classes of repos for which the manifest creation was requested.
-    """
-    repo_classes = []
-    for repo_class in content_config:
-        for repo_id in repo_ids:
-            if repo_class in repo_id:
-                repo_classes.append(repo_class)
-                break
-
-    return repo_classes
-
-
 def get_items_for_depsolving(
-    app_conf: Any, repo_ids: list[str], repo_class: str
+    app_conf: Any, repo_ids: list[str]
 ) -> list[dict[str, Any]]:
     """
     Returns a list of {"repo_group": ["repo1", "repo2"], "url": "https://config"}
     items which are then used for creation of depsolving tasks.
     """
-    config_url = app_conf.content_config[repo_class]
-    with make_pulp_client(app_conf) as client:
-        configs = get_configs(config_url)
-        base_pkg_only = check_and_get_flag(configs, config_url)
-        if base_pkg_only:
-            items = get_items_not_full_depsolving(client, configs, repo_ids, config_url)
-        else:
-            repo_groups = get_repo_groups(client, configs)
-            items = get_items_from_groups(repo_ids, repo_groups, config_url)
+    all_items: list[dict[str, Any]] = []
 
-    _LOG.info("Determined items for depsolving: %s", items)
-    return items
+    with make_pulp_client(app_conf) as client:
+        # Try each config URL to find matching repos
+        for config_url in app_conf.content_config.values():
+            configs = get_configs(config_url)
+            if not configs:
+                continue
+
+            base_pkg_only = check_and_get_flag(configs, config_url)
+            if base_pkg_only:
+                items = get_items_not_full_depsolving(
+                    client, configs, repo_ids, config_url
+                )
+            else:
+                repo_groups = get_repo_groups(client, configs)
+                items = get_items_from_groups(repo_ids, repo_groups, config_url)
+
+            all_items.extend(items)
+
+    _LOG.info("Determined items for depsolving: %s", all_items)
+    return all_items
 
 
 def get_items_from_groups(

@@ -8,20 +8,6 @@ from ubi_manifest.app import utils
 from .utils import create_and_insert_repo, create_mock_configs
 
 
-@pytest.mark.parametrize(
-    "repo_ids,expected_result",
-    [
-        (["ubi_repo1, ubi_repo2"], ["ubi"]),
-        (["ubi_repo, client-tools_repo"], ["ubi", "client-tools"]),
-        (["foreign_repo"], []),
-    ],
-)
-def test_get_repo_classes(repo_ids, expected_result):
-    content_config = {"ubi": "https://ubi", "client-tools": "https://ct"}
-    result = utils.get_repo_classes(content_config, repo_ids)
-    assert result == expected_result
-
-
 def test_get_items_from_groups():
     repo_groups = {
         "7-aarch64": {"ubi_repo1", "ubi_repo2", "ubi_repo3"},
@@ -61,7 +47,8 @@ def test_check_and_get_flag():
 
 
 def test_check_and_get_flag_error():
-    configs = create_mock_configs(2, flags=[{}, {"base_pkgs_only": True}])
+    configs = create_mock_configs(2)
+    configs[1].flags.as_dict.return_value = {"base_pkgs_only": True}
     # 'base_pkg_only' flag is expected to have same value in all configs for one repo class
     with pytest.raises(utils.FlagInconsistencyError):
         utils.check_and_get_flag(configs, "url")

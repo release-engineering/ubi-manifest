@@ -60,6 +60,8 @@ class Config:
         validator=validators.matches_re(FILE_PATH_REGEX), default="path/to/key"
     )
     pulp_verify: Union[bool, str] = True
+    # As of RHELDST-34516, the dictionary keys in content_config are unused
+    # and left only for backward compatibility.
     content_config: dict[str, str] = field(
         validator=validate_content_config,
         default={"ubi": "url_or_dir_1", "client-tools": "url_or_dir_2"},

@@ -16,7 +16,7 @@ from .models import (
     StatusResult,
     TaskState,
 )
-from .utils import get_gitlab_base_url, get_items_for_depsolving, get_repo_classes
+from .utils import get_gitlab_base_url, get_items_for_depsolving
 
 REQUEST_TIMEOUT = 20
 
@@ -177,25 +177,7 @@ def manifest_post(depsolve_item: DepsolveItem) -> list[TaskState]:
             detail="No repo IDs were provided.",
         )
 
-    repo_classes = get_repo_classes(app.conf.content_config, depsolve_item.repo_ids)
-    # we expect exactly one repo class in one request
-    if len(repo_classes) > 1:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Can't process repos from different classes {repo_classes} "
-            "in one request. Please make separate request for each class.",
-        )
-    if len(repo_classes) == 0:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Given repos {depsolve_item.repo_ids} have unexpected ids. "
-            "It seems they are not from any of the accepted repo classes "
-            f"{list(app.conf.content_config.keys())} defined in content config.",
-        )
-
-    depsolve_items = get_items_for_depsolving(
-        app.conf, depsolve_item.repo_ids, repo_classes[0]
-    )
+    depsolve_items = get_items_for_depsolving(app.conf, depsolve_item.repo_ids)
     if not depsolve_items:
         raise HTTPException(
             status_code=404,

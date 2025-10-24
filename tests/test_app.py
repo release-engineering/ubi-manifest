@@ -279,7 +279,7 @@ def test_manifest_get_empty(client, auth_header):
 
 
 def test_manifest_get_not_found(client, auth_header):
-    """test getting depsolved content when the cotent is not available for given repo_id"""
+    """test getting depsolved content when the content is not available for given repo_id"""
     with mock.patch("ubi_manifest.app.api.redis.from_url") as mock_redis_from_url:
         mock_redis_from_url.return_value = MockedRedis(data={})
         response = client.get(
@@ -303,25 +303,29 @@ def test_manifest_post_full_dep(
         MockAsyncResult(task_id="foo-bar-id-1", state="PENDING"),
         MockAsyncResult(task_id="foo-bar-id-2", state="PENDING"),
     ]
-    configs = create_mock_configs(3)
-    get_loader.return_value = mock.Mock(load_all=mock.Mock(return_value=configs))
+    ubi_configs = create_mock_configs(3, prefix="ubi")
+    ct_configs = create_mock_configs(3, prefix="client-tools")
+    get_loader.side_effect = [
+        mock.Mock(load_all=mock.Mock(return_value=ubi_configs)),
+        mock.Mock(load_all=mock.Mock(return_value=ct_configs)),
+    ]
     create_and_insert_repo(
         id="ubi_repo_1",
-        content_set="content_set_0",
+        content_set="ubi_content_set_0",
         ubi_population=True,
         arch="arch1",
         pulp=pulp,
     )
     create_and_insert_repo(
         id="ubi_repo_2",
-        content_set="content_set_1",
+        content_set="ubi_content_set_1",
         ubi_population=True,
         arch="arch1",
         pulp=pulp,
     )
     create_and_insert_repo(
         id="ubi_repo_3",
-        content_set="content_set_2",
+        content_set="ubi_content_set_2",
         ubi_population=True,
         arch="arch2",
         pulp=pulp,
@@ -370,20 +374,25 @@ def test_manifest_post_not_full_dep(
         MockAsyncResult(task_id="foo-bar-id-1", state="PENDING"),
         MockAsyncResult(task_id="foo-bar-id-2", state="PENDING"),
     ]
-    configs = create_mock_configs(
-        2, flags=[{"base_pkgs_only": True}, {"base_pkgs_only": True}]
+    ct_configs = create_mock_configs(
+        2, flags={"base_pkgs_only": True}, prefix="client-tools"
     )
-    get_loader.return_value = mock.Mock(load_all=mock.Mock(return_value=configs))
+    get_loader.side_effect = [
+        # Empty list also tests the case when a defined repo
+        # doesn't contain any suitable content config
+        mock.Mock(load_all=mock.Mock(return_value=[])),
+        mock.Mock(load_all=mock.Mock(return_value=ct_configs)),
+    ]
     create_and_insert_repo(
         id="client-tools_repo_1",
-        content_set="content_set_0",
+        content_set="client-tools_content_set_0",
         ubi_population=True,
         arch="arch1",
         pulp=pulp,
     )
     create_and_insert_repo(
         id="client-tools_repo_2",
-        content_set="content_set_1",
+        content_set="client-tools_content_set_1",
         ubi_population=True,
         arch="arch1",
         pulp=pulp,
@@ -450,62 +459,6 @@ def test_manifest_post_no_depsolve_items(
     assert (
         json_data["detail"]
         == "No depsolve items were identified for ['ubi_repo_not_allowed']."
-    )
-
-
-@mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@mock.patch("ubi_manifest.worker.utils.Client")
-@mock.patch("celery.app.task.Task.apply_async")
-def test_manifest_post_more_repo_classes(
-    mocked_apply_async, pulp_client, get_loader, client, auth_header
-):
-    """test request for depsolving for given repo ids, which are from different repo classes"""
-    response = client.post(
-        "/api/v1/manifest",
-        json={"repo_ids": ["ubi_repo", "client-tools_repo"]},
-        headers=auth_header(roles=["creator"]),
-    )
-    # The request has finished before any calls on pulp client or ubiconfig were made because
-    # repos from two different classes were in the request.
-    mocked_apply_async.assert_not_called()
-    pulp_client.assert_not_called()
-    get_loader.assert_not_called()
-    # expected status code is 400
-    assert response.status_code == 400
-    # there is enough detail info in the response
-    json_data = response.json()
-    assert (
-        json_data["detail"]
-        == "Can't process repos from different classes ['ubi', 'client-tools'] in one request. "
-        "Please make separate request for each class."
-    )
-
-
-@mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@mock.patch("ubi_manifest.worker.utils.Client")
-@mock.patch("celery.app.task.Task.apply_async")
-def test_manifest_post_wrong_repo_ids(
-    mocked_apply_async, pulp_client, get_loader, client, auth_header
-):
-    """test request for depsolving for given repo ids, which are unexpected."""
-    response = client.post(
-        "/api/v1/manifest",
-        json={"repo_ids": ["some_foreign_repo"]},
-        headers=auth_header(roles=["creator"]),
-    )
-    # The request has finished before any calls on pulp client or ubiconfig were made because
-    # repos from some unknown class were in the request.
-    mocked_apply_async.assert_not_called()
-    pulp_client.assert_not_called()
-    get_loader.assert_not_called()
-    # expected status code is 404
-    assert response.status_code == 404
-    # there is enough detail info in the response
-    json_data = response.json()
-    assert (
-        json_data["detail"]
-        == "Given repos ['some_foreign_repo'] have unexpected ids. It seems they are not "
-        "from any of the accepted repo classes ['ubi', 'client-tools'] defined in content config."
     )
 
 

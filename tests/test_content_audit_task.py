@@ -4,7 +4,7 @@ from unittest import mock
 import pytest
 from pubtools.pulplib import Distributor, ModulemdUnit, RpmUnit
 
-from tests.utils import MockLoader, create_and_insert_repo
+from tests.utils import MockLoader, create_and_insert_repo, create_mock_configs
 from ubi_manifest.worker.tasks.content_audit import content_audit_task
 
 
@@ -333,7 +333,10 @@ def test_pipeline(pulp, caplog):
                 assert log not in caplog.text
 
 
-def test_pipeline_with_invalid_repo(pulp):
+@mock.patch("ubi_manifest.worker.tasks.content_audit.UbiConfigLoader")
+def test_pipeline_with_invalid_repo(mock_loader, pulp):
+    mock_loader.return_value.all_config = create_mock_configs(1)
+
     distributor_bin = Distributor(
         id="yum_distributor",
         type_id="yum_distributor",
@@ -390,5 +393,5 @@ def test_pipeline_with_invalid_repo(pulp):
     with mock.patch("ubi_manifest.worker.utils.Client") as client:
         client.return_value = pulp.client
 
-        with pytest.raises(ValueError, match="unexpected id"):
+        with pytest.raises(ValueError, match="no matching config"):
             content_audit_task()
