@@ -8,8 +8,10 @@ from tests.utils import MockLoader, create_and_insert_repo, create_mock_configs
 from ubi_manifest.worker.tasks.content_audit import content_audit_task
 
 
-def test_pipeline(pulp, caplog):
+@mock.patch("ubi_manifest.worker.tasks.content_audit.get_content_config_paths")
+def test_pipeline(mock_content_config_paths, pulp, caplog):
     caplog.set_level(logging.DEBUG, logger="ubi_manifest.worker.tasks.auditing")
+    mock_content_config_paths.return_value = ["foo"]
 
     # Input repos
     distributor_rhel_binary_repo_1 = Distributor(
@@ -334,7 +336,9 @@ def test_pipeline(pulp, caplog):
 
 
 @mock.patch("ubi_manifest.worker.tasks.content_audit.UbiConfigLoader")
-def test_pipeline_with_invalid_repo(mock_loader, pulp):
+@mock.patch("ubi_manifest.worker.tasks.content_audit.get_content_config_paths")
+def test_pipeline_with_invalid_repo(mock_content_config_paths, mock_loader, pulp):
+    mock_content_config_paths.return_value = ["foo"]
     mock_loader.return_value.all_config = create_mock_configs(1)
 
     distributor_bin = Distributor(

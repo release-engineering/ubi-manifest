@@ -1,5 +1,6 @@
 from pubtools.pulplib import Client, Criteria, Matcher, YumRepository
 
+from ubi_manifest.app.utils import get_content_config_paths
 from ubi_manifest.worker.tasks.auditing import ContentProcessor
 from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.ubi_config import UbiConfigLoader
@@ -39,7 +40,7 @@ def content_audit_task() -> None:
     This task checks that all available content is up-to-date, that whitelisted
     content is present, and that blacklisted content is absent.
     """
-    config_loaders = [UbiConfigLoader(url) for url in app.conf.content_config.values()]
+    config_loaders = [UbiConfigLoader(url) for url in get_content_config_paths()]
 
     with make_pulp_client(app.conf) as client:
         out_repos_bundles = fetch_ubi_repos_bundles(client)

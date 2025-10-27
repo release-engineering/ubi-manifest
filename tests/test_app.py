@@ -27,11 +27,13 @@ class MockAsyncResult:
         ),
     ],
 )
+@mock.patch("ubi_manifest.app.api.get_gitlab_healthcheck_url")
 @mock.patch("ubi_manifest.app.api.redis.from_url")
 @mock.patch("ubi_manifest.app.api.app.control.inspect")
 def test_status_beat_no_gitlab(
     inspect,
     mock_redis,
+    get_gitlab_healthcheck_url,
     delta_seconds,
     beat_status,
     client,
@@ -46,7 +48,8 @@ def test_status_beat_no_gitlab(
     )
     beat = (datetime.now() - timedelta(seconds=delta_seconds)).isoformat().encode()
     mock_redis.return_value = MockedRedis(data={"celery-beat-heartbeat": beat})
-    requests_mock.get("https://some_url/pulp/api/v2/status", reason="OK")
+    get_gitlab_healthcheck_url.return_value = None
+    requests_mock.get("https://pulp_url/pulp/api/v2/status", reason="OK")
 
     response = client.get("/api/v1/status")
 
@@ -67,13 +70,13 @@ def test_status_beat_no_gitlab(
     }
 
 
-@mock.patch("ubi_manifest.app.api.get_gitlab_base_url")
+@mock.patch("ubi_manifest.app.api.get_gitlab_healthcheck_url")
 @mock.patch("ubi_manifest.app.api.redis.from_url")
 @mock.patch("ubi_manifest.app.api.app.control.inspect")
 def test_status_no_beat_gitlab(
     inspect,
     mock_redis,
-    get_gitlab_url,
+    get_gitlab_healthcheck_url,
     client,
     requests_mock,
 ):
@@ -85,10 +88,10 @@ def test_status_no_beat_gitlab(
         scheduled=mock.Mock(return_value={"worker01": []}),
     )
     mock_redis.return_value = MockedRedis(data={})
-    get_gitlab_url.return_value = "https://gitlab.com"
+    get_gitlab_healthcheck_url.return_value = "https://gitlab.com/-/health"
 
     requests_mock.get("https://gitlab.com/-/health", reason="OK")
-    requests_mock.get("https://some_url/pulp/api/v2/status", reason="OK")
+    requests_mock.get("https://pulp_url/pulp/api/v2/status", reason="OK")
 
     response = client.get("/api/v1/status")
 
@@ -112,13 +115,13 @@ def test_status_no_beat_gitlab(
     }
 
 
-@mock.patch("ubi_manifest.app.api.get_gitlab_base_url")
+@mock.patch("ubi_manifest.app.api.get_gitlab_healthcheck_url")
 @mock.patch("ubi_manifest.app.api.redis.from_url")
 @mock.patch("ubi_manifest.app.api.app.control.inspect")
 def test_status_errors(
     inspect,
     mock_redis,
-    get_gitlab_url,
+    get_gitlab_healthcheck_url,
     client,
     requests_mock,
 ):
@@ -130,13 +133,13 @@ def test_status_errors(
         scheduled=mock.Mock(return_value={"worker01": []}),
     )
     mock_redis.return_value = MockedRedis(data={}, ping_fail=True)
-    get_gitlab_url.return_value = "https://gitlab.com"
+    get_gitlab_healthcheck_url.return_value = "https://gitlab.com/-/health"
 
     requests_mock.get(
         "https://gitlab.com/-/health", status_code=503, reason="Service Unavailable"
     )
     requests_mock.get(
-        "https://some_url/pulp/api/v2/status",
+        "https://pulp_url/pulp/api/v2/status",
         status_code=503,
         reason="Service Unavailable",
     )
@@ -164,7 +167,7 @@ def test_status_errors(
         },
         "connection_to_pulp": {
             "status": "Failed",
-            "msg": "503 Server Error: Service Unavailable for url: https://some_url/pulp/api/v2/status",
+            "msg": "503 Server Error: Service Unavailable for url: https://pulp_url/pulp/api/v2/status",
         },
     }
 
@@ -292,17 +295,25 @@ def test_manifest_get_not_found(client, auth_header):
         assert json_data["detail"] == "Content for ubi_repo_id not found"
 
 
+@mock.patch("ubi_manifest.app.utils.get_content_config_paths")
 @mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
 @mock.patch("ubi_manifest.worker.utils.Client")
 @mock.patch("celery.app.task.Task.apply_async")
 def test_manifest_post_full_dep(
-    mocked_apply_async, pulp_client, get_loader, client, pulp, auth_header
+    mocked_apply_async,
+    pulp_client,
+    get_loader,
+    get_content_config_paths,
+    client,
+    pulp,
+    auth_header,
 ):
     """test request for depsolving for given repo ids where we use full depsolving"""
     mocked_apply_async.side_effect = [
         MockAsyncResult(task_id="foo-bar-id-1", state="PENDING"),
         MockAsyncResult(task_id="foo-bar-id-2", state="PENDING"),
     ]
+    get_content_config_paths.return_value = ["url_or_dir_1", "url_or_dir_2"]
     ubi_configs = create_mock_configs(3, prefix="ubi")
     ct_configs = create_mock_configs(3, prefix="client-tools")
     get_loader.side_effect = [
@@ -363,17 +374,25 @@ def test_manifest_post_full_dep(
     assert json_data[1]["state"] == "PENDING"
 
 
+@mock.patch("ubi_manifest.app.utils.get_content_config_paths")
 @mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
 @mock.patch("ubi_manifest.worker.utils.Client")
 @mock.patch("celery.app.task.Task.apply_async")
 def test_manifest_post_not_full_dep(
-    mocked_apply_async, pulp_client, get_loader, client, pulp, auth_header
+    mocked_apply_async,
+    pulp_client,
+    get_loader,
+    get_content_config_paths,
+    client,
+    pulp,
+    auth_header,
 ):
     """test request for depsolving for given repo ids where we do not use full depsolving"""
     mocked_apply_async.side_effect = [
         MockAsyncResult(task_id="foo-bar-id-1", state="PENDING"),
         MockAsyncResult(task_id="foo-bar-id-2", state="PENDING"),
     ]
+    get_content_config_paths.return_value = ["url_or_dir_1", "url_or_dir_2"]
     ct_configs = create_mock_configs(
         2, flags={"base_pkgs_only": True}, prefix="client-tools"
     )
@@ -424,13 +443,21 @@ def test_manifest_post_not_full_dep(
     assert json_data[1]["state"] == "PENDING"
 
 
+@mock.patch("ubi_manifest.app.utils.get_content_config_paths")
 @mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
 @mock.patch("ubi_manifest.worker.utils.Client")
 @mock.patch("celery.app.task.Task.apply_async")
 def test_manifest_post_no_depsolve_items(
-    mocked_apply_async, pulp_client, get_loader, client, pulp, auth_header
+    mocked_apply_async,
+    pulp_client,
+    get_loader,
+    get_content_config_paths,
+    client,
+    pulp,
+    auth_header,
 ):
     """test request for depsolving for given repo ids, but no depsolve items are identified"""
+    get_content_config_paths.return_value = ["url_or_dir_1"]
     get_loader.return_value = mock.Mock(
         load_all=mock.Mock(return_value=create_mock_configs(3))
     )

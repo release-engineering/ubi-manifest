@@ -16,7 +16,7 @@ from .models import (
     StatusResult,
     TaskState,
 )
-from .utils import get_gitlab_base_url, get_items_for_depsolving
+from .utils import get_gitlab_healthcheck_url, get_items_for_depsolving
 
 REQUEST_TIMEOUT = 20
 
@@ -101,18 +101,15 @@ def status() -> StatusResult:
             "msg": "No heartbeat task ran yet. Wait a minute.",
         }
 
-    # Gitlab is used only if the content configs are loaded from Gitlab.
-    # In case the configs are loaded from directory, connection to Gitlab
-    # is not needed, therefore not checked.
-    gitlab_base_url = get_gitlab_base_url(app.conf.content_config)
-    if gitlab_base_url:
+    # GitLab is used only if the CDN definitions or content configs are loaded
+    # from it. In case both the definitions and the configs are loaded from directory,
+    # connection to GitLab is not needed, therefore not checked.
+    gitlab_hc_url = get_gitlab_healthcheck_url()
+    if gitlab_hc_url:
         try:
-            gitlab_resp = requests.get(
-                f"{gitlab_base_url}/-/health",
-                timeout=REQUEST_TIMEOUT,
-            )
-            gitlab_status = {"status": gitlab_resp.reason, "msg": "Gitlab available."}
+            gitlab_resp = requests.get(gitlab_hc_url, timeout=REQUEST_TIMEOUT)
             gitlab_resp.raise_for_status()
+            gitlab_status = {"status": gitlab_resp.reason, "msg": "Gitlab available."}
         except Exception as ex:  # pylint: disable=broad-except
             gitlab_status = {"status": "Failed", "msg": str(ex)}
     else:

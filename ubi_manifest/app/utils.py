@@ -3,8 +3,10 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 import ubiconfig
+from cdn_definitions import load_data
 from pubtools.pulplib import Client, Criteria
 
+from ubi_manifest.worker.tasks.celery import app
 from ubi_manifest.worker.utils import make_pulp_client
 
 _LOG = logging.getLogger(__name__)
@@ -12,6 +14,35 @@ _LOG = logging.getLogger(__name__)
 
 class FlagInconsistencyError(ValueError):
     pass
+
+
+def get_content_config_paths() -> list[str]:
+    """
+    Returns a list of content config paths or URLs loaded from cdn-definitions
+    or `content_config` configuration property.
+
+    The definitions URL and environment are determined by `cdn_definitions_url`
+    and `cdn_definitions_env` in app.conf. The paths or URLs are extracted from
+    the 'repo_content_sync' key in the data returned by `cdn_definitions.load_data()`.
+    If no `cdn_definitions_url` is set, the content config paths or URLs defined
+    in `content_config` are returned instead.
+    """
+    if app.conf.cdn_definitions_url:
+        _LOG.info(
+            "Loading content config URLs for environment '%s' from '%s'",
+            app.conf.cdn_definitions_env,
+            app.conf.cdn_definitions_url,
+        )
+        urls = [
+            item["source"]
+            for item in load_data(app.conf.cdn_definitions_url)
+            .get("repo_content_sync", {})
+            .get(app.conf.cdn_definitions_env, [])
+        ]
+    else:
+        urls = list(app.conf.content_config.values())
+    _LOG.info("Loaded %d content config URL(s): %s", len(urls), urls)
+    return urls
 
 
 def get_items_for_depsolving(
@@ -25,7 +56,7 @@ def get_items_for_depsolving(
 
     with make_pulp_client(app_conf) as client:
         # Try each config URL to find matching repos
-        for config_url in app_conf.content_config.values():
+        for config_url in get_content_config_paths():
             configs = get_configs(config_url)
             if not configs:
                 continue
@@ -145,16 +176,24 @@ def get_repo_ids_from_cs(client: Client, ubi_binary_cs: str) -> Any:
     return repos
 
 
-def get_gitlab_base_url(config: dict[str, str]) -> Optional[str]:
+def get_gitlab_healthcheck_url() -> Optional[str]:
     """
-    Returns gitlab base url if the content configs are loaded from gitlab.
-    Returns None if the content configs are loaded from directory.
+    Returns GitLab healthcheck URL if either the CDN definitions or content configs
+    are loaded from an URL, making an assumption that it is a GitLab URL.
+    Returns None if all the configs are loaded from filesystem.
     """
-    for config_path in config.values():
+    parsed = urlparse(app.conf.cdn_definitions_url)
+    # If there is a scheme, CDN definitions are loaded from an URL, so
+    # we assume it is a GitLab URL and return its healthcheck URL.
+    if parsed.scheme:
+        return f"{parsed.scheme}://{parsed.netloc}/-/health"
+
+    # CDN definitions were loaded from a file, check if any sync repo is on GitLab
+    for config_path in get_content_config_paths():
         parsed = urlparse(config_path)
-        # if there is a scheme, content config is passed from Gitlab so
-        # return the base url on which to do healthchek
+        # If there is a scheme, content config is loaded from an URL, so
+        # we assume it is a GitLab URL and return its healthcheck URL.
         if parsed.scheme:
-            return f"{parsed.scheme}://{parsed.netloc}"
-    # otherwise content config is passed from directory, therefore no healthcheck is needed
+            return f"{parsed.scheme}://{parsed.netloc}/-/health"
+    # All configs are loaded from filesystem, therefore no healthcheck is needed.
     return None

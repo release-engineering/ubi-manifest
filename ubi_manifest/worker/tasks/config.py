@@ -2,7 +2,7 @@ import configparser
 import json
 import os
 import re
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import celery
 from attrs import AttrsInstance, define, field, validators
@@ -18,7 +18,25 @@ PASSWORD_REGEX = r"^[^\x00]+$"  # allow all chars but null byte
 TIMEZONE_REGEX = r"^[A-Za-z]{1,10}$"
 
 
-def validate_content_config(_: AttrsInstance, attr: Any, value: dict[str, str]) -> None:
+def validate_url_or_path(_: AttrsInstance, attr: Any, value: Optional[str]) -> None:
+    if value is None:
+        return
+    if value.lower().startswith(("http://", "https://")):
+        regex = URL_REGEX
+        value_type = "URL"
+    else:
+        regex = FILE_PATH_REGEX
+        value_type = "Path"
+    if not re.match(regex, value, re.VERBOSE):
+        raise ValueError(
+            f"{value_type} in '{attr.name}' must match regex '{regex}'."
+            f"'{value}' doesn't."
+        )
+
+
+def validate_content_config(
+    inst: AttrsInstance, attr: Any, value: dict[str, str]
+) -> None:
     for repo_class, url_or_dir in value.items():
         if not re.match(REPO_CLASS_REGEX, repo_class):
             raise ValueError(
@@ -27,25 +45,25 @@ def validate_content_config(_: AttrsInstance, attr: Any, value: dict[str, str]) 
                     f"'{repo_class}' doesn't."
                 )
             )
-        url_or_dir = str(url_or_dir)
-        if url_or_dir.lower().startswith(("http://", "https://")):
-            regex = URL_REGEX
-            value_type = "Url"
-        else:
-            regex = FILE_PATH_REGEX
-            value_type = "Path"
-        if not re.match(regex, url_or_dir, re.VERBOSE):
-            raise ValueError(
-                f"{value_type} to config in '{attr.name}' must match regex '{regex}'."
-                f"'{url_or_dir}' doesn't."
-            )
+        validate_url_or_path(inst, attr, str(url_or_dir))
+
+
+def validate_config_sources(inst: Any) -> None:
+    """Validate that either content_config or both cdn_definitions fields are set."""
+    if not inst.content_config and not (
+        inst.cdn_definitions_url and inst.cdn_definitions_env
+    ):
+        raise ValueError(
+            "Either 'content_config' or both 'cdn_definitions_url' and "
+            "'cdn_definitions_env' must be set"
+        )
 
 
 @define
 class Config:
     pulp_url: str = field(
         validator=validators.matches_re(URL_REGEX, re.VERBOSE),
-        default="https://some_url",
+        default="https://pulp_url",
     )
     pulp_username: str = field(
         validator=validators.matches_re(USERNAME_REGEX), default="username"
@@ -66,6 +84,11 @@ class Config:
         validator=validate_content_config,
         default={"ubi": "url_or_dir_1", "client-tools": "url_or_dir_2"},
     )
+    cdn_definitions_url: Optional[str] = field(
+        validator=validate_url_or_path,
+        default=None,
+    )
+    cdn_definitions_env: Optional[str] = field(default=None)
     imports: list[str] = [
         "ubi_manifest.worker.tasks.depsolve",
         "ubi_manifest.worker.tasks.repo_monitor",
@@ -107,6 +130,9 @@ class Config:
         validator=validators.matches_re(TIMEZONE_REGEX), default="UTC"
     )
 
+    def __attrs_post_init__(self) -> None:
+        validate_config_sources(self)
+
 
 def make_config(celery_app: celery.Celery) -> None:
     config_file = os.getenv("UBI_MANIFEST_CONFIG", "/etc/ubi_manifest/app.conf")
@@ -117,7 +143,6 @@ def make_config(celery_app: celery.Celery) -> None:
         conf_item_str = config_from_file["CONFIG"].pop("content_config", "{}")
         conf_item = json.loads(re.sub(r"[\s]+", "", conf_item_str))
         conf_dict["content_config"] = conf_item
-
         config = Config(**conf_dict)
     except KeyError:
         config = Config()

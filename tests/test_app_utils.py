@@ -1,11 +1,36 @@
 from unittest.mock import Mock, patch
 
 import pytest
-from pubtools.pulplib import YumRepository
 
 from ubi_manifest.app import utils
 
 from .utils import create_and_insert_repo, create_mock_configs
+
+
+@patch("ubi_manifest.app.utils.load_data")
+@patch("ubi_manifest.app.utils.app")
+def test_get_content_config_paths_from_cdn_definitions(mock_app, load_data):
+    mock_app.conf.cdn_definitions_env = "ci"
+    load_data.return_value = {
+        "repo_content_sync": {
+            "ci": [{"source": "foo"}, {"source": "bar"}],
+            "xx": [{"source": "baz"}],
+        }
+    }
+
+    result = utils.get_content_config_paths()
+
+    assert result == ["foo", "bar"]
+
+
+@patch("ubi_manifest.app.utils.app")
+def test_get_content_config_paths_from_content_config(mock_app):
+    mock_app.conf.cdn_definitions_url = None
+    mock_app.conf.content_config = {"ubi": "baz", "client-tools": "quux"}
+
+    result = utils.get_content_config_paths()
+
+    assert result == ["baz", "quux"]
 
 
 def test_get_items_from_groups():
@@ -93,18 +118,35 @@ def test_get_repo_groups(pulp):
 
 
 @pytest.mark.parametrize(
-    "config,expected_result",
+    "definitions_path,configs_path,expected_result",
     [
         (
-            {
-                "ubi": "https://gitlab.com/ubi",
-                "client-tools": "https://gitlab.com/client-tools",
-            },
-            "https://gitlab.com",
+            "https://gitlab.com/cdn-definitions.yaml",
+            [],
+            "https://gitlab.com/-/health",
         ),
-        ({"ubi": "/path/to/ubi/", "client-tools": ".path/to/client-tools/"}, None),
+        (
+            "/path/to/cdn-definitions.yaml",
+            ["https://gitlab.com/ubi", "https://gitlab.com/client-tools"],
+            "https://gitlab.com/-/health",
+        ),
+        (
+            "/path/to/cdn-definitions.yaml",
+            ["/path/to/ubi/", ".path/to/client-tools/"],
+            None,
+        ),
     ],
 )
-def test_get_gitlab_base_url(config, expected_result):
-    result = utils.get_gitlab_base_url(config)
+@patch("ubi_manifest.app.utils.get_content_config_paths")
+@patch("ubi_manifest.app.utils.app")
+def test_get_gitlab_healthcheck_url(
+    mock_app,
+    mock_get_content_config_paths,
+    definitions_path,
+    configs_path,
+    expected_result,
+):
+    mock_app.conf.cdn_definitions_url = definitions_path
+    mock_get_content_config_paths.return_value = configs_path
+    result = utils.get_gitlab_healthcheck_url()
     assert result == expected_result
