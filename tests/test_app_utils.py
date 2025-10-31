@@ -1,41 +1,36 @@
 from unittest.mock import Mock, patch
 
 import pytest
-from pubtools.pulplib import YumRepository
 
 from ubi_manifest.app import utils
 
 from .utils import create_and_insert_repo, create_mock_configs
 
 
-@pytest.mark.parametrize(
-    "repo_ids,expected_result",
-    [
-        (["ubi_repo1, ubi_repo2"], ["ubi"]),
-        (["ubi_repo, client-tools_repo"], ["ubi", "client-tools"]),
-        (["foreign_repo"], []),
-    ],
-)
-def test_get_repo_classes(repo_ids, expected_result):
-    content_config = {"ubi": "https://ubi", "client-tools": "https://ct"}
-    result = utils.get_repo_classes(content_config, repo_ids)
-    assert result == expected_result
+@patch("ubi_manifest.app.utils.load_data")
+@patch("ubi_manifest.app.utils.app")
+def test_get_content_config_paths_from_cdn_definitions(mock_app, load_data):
+    mock_app.conf.cdn_definitions_env = "ci"
+    load_data.return_value = {
+        "repo_content_sync": {
+            "ci": [{"source": "foo"}, {"source": "bar"}],
+            "xx": [{"source": "baz"}],
+        }
+    }
+
+    result = utils.get_content_config_paths()
+
+    assert result == ["foo", "bar"]
 
 
-@patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@patch("ubi_manifest.worker.utils.Client")
-def test_get_items_for_depsolving_default_groups(get_loader, pulp_client):
-    app_conf = Mock(
-        content_config={"ubi": "https://ubi", "client-tools": "https://ct"},
-        allowed_ubi_repo_groups={"ubi8:aarch64": ["ubi_repo1", "ubi_repo2"]},
-    )
-    result = utils.get_items_for_depsolving(app_conf, ["ubi_repo1"], "ubi")
+@patch("ubi_manifest.app.utils.app")
+def test_get_content_config_paths_from_content_config(mock_app):
+    mock_app.conf.cdn_definitions_url = None
+    mock_app.conf.content_config = {"ubi": "baz", "client-tools": "quux"}
 
-    assert result == [{"repo_group": ["ubi_repo1", "ubi_repo2"], "url": "https://ubi"}]
-    # Since the default allowed_repo_groups were defined in the app config, we do not need
-    # to call pulp or load any configs for the determination of the repo groups.
-    pulp_client.assert_not_called()
-    get_loader.assert_not_called()
+    result = utils.get_content_config_paths()
+
+    assert result == ["baz", "quux"]
 
 
 def test_get_items_from_groups():
@@ -77,7 +72,8 @@ def test_check_and_get_flag():
 
 
 def test_check_and_get_flag_error():
-    configs = create_mock_configs(2, flags=[{}, {"base_pkgs_only": True}])
+    configs = create_mock_configs(2)
+    configs[1].flags.as_dict.return_value = {"base_pkgs_only": True}
     # 'base_pkg_only' flag is expected to have same value in all configs for one repo class
     with pytest.raises(utils.FlagInconsistencyError):
         utils.check_and_get_flag(configs, "url")
@@ -122,18 +118,35 @@ def test_get_repo_groups(pulp):
 
 
 @pytest.mark.parametrize(
-    "config,expected_result",
+    "definitions_path,configs_path,expected_result",
     [
         (
-            {
-                "ubi": "https://gitlab.com/ubi",
-                "client-tools": "https://gitlab.com/client-tools",
-            },
-            "https://gitlab.com",
+            "https://gitlab.com/cdn-definitions.yaml",
+            [],
+            "https://gitlab.com/-/health",
         ),
-        ({"ubi": "/path/to/ubi/", "client-tools": ".path/to/client-tools/"}, None),
+        (
+            "/path/to/cdn-definitions.yaml",
+            ["https://gitlab.com/ubi", "https://gitlab.com/client-tools"],
+            "https://gitlab.com/-/health",
+        ),
+        (
+            "/path/to/cdn-definitions.yaml",
+            ["/path/to/ubi/", ".path/to/client-tools/"],
+            None,
+        ),
     ],
 )
-def test_get_gitlab_base_url(config, expected_result):
-    result = utils.get_gitlab_base_url(config)
+@patch("ubi_manifest.app.utils.get_content_config_paths")
+@patch("ubi_manifest.app.utils.app")
+def test_get_gitlab_healthcheck_url(
+    mock_app,
+    mock_get_content_config_paths,
+    definitions_path,
+    configs_path,
+    expected_result,
+):
+    mock_app.conf.cdn_definitions_url = definitions_path
+    mock_get_content_config_paths.return_value = configs_path
+    result = utils.get_gitlab_healthcheck_url()
     assert result == expected_result

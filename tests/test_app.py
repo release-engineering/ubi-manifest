@@ -27,11 +27,13 @@ class MockAsyncResult:
         ),
     ],
 )
+@mock.patch("ubi_manifest.app.api.get_gitlab_healthcheck_url")
 @mock.patch("ubi_manifest.app.api.redis.from_url")
 @mock.patch("ubi_manifest.app.api.app.control.inspect")
 def test_status_beat_no_gitlab(
     inspect,
     mock_redis,
+    get_gitlab_healthcheck_url,
     delta_seconds,
     beat_status,
     client,
@@ -46,7 +48,8 @@ def test_status_beat_no_gitlab(
     )
     beat = (datetime.now() - timedelta(seconds=delta_seconds)).isoformat().encode()
     mock_redis.return_value = MockedRedis(data={"celery-beat-heartbeat": beat})
-    requests_mock.get("https://some_url/pulp/api/v2/status", reason="OK")
+    get_gitlab_healthcheck_url.return_value = None
+    requests_mock.get("https://pulp_url/pulp/api/v2/status", reason="OK")
 
     response = client.get("/api/v1/status")
 
@@ -67,13 +70,13 @@ def test_status_beat_no_gitlab(
     }
 
 
-@mock.patch("ubi_manifest.app.api.get_gitlab_base_url")
+@mock.patch("ubi_manifest.app.api.get_gitlab_healthcheck_url")
 @mock.patch("ubi_manifest.app.api.redis.from_url")
 @mock.patch("ubi_manifest.app.api.app.control.inspect")
 def test_status_no_beat_gitlab(
     inspect,
     mock_redis,
-    get_gitlab_url,
+    get_gitlab_healthcheck_url,
     client,
     requests_mock,
 ):
@@ -85,10 +88,10 @@ def test_status_no_beat_gitlab(
         scheduled=mock.Mock(return_value={"worker01": []}),
     )
     mock_redis.return_value = MockedRedis(data={})
-    get_gitlab_url.return_value = "https://gitlab.com"
+    get_gitlab_healthcheck_url.return_value = "https://gitlab.com/-/health"
 
     requests_mock.get("https://gitlab.com/-/health", reason="OK")
-    requests_mock.get("https://some_url/pulp/api/v2/status", reason="OK")
+    requests_mock.get("https://pulp_url/pulp/api/v2/status", reason="OK")
 
     response = client.get("/api/v1/status")
 
@@ -112,13 +115,13 @@ def test_status_no_beat_gitlab(
     }
 
 
-@mock.patch("ubi_manifest.app.api.get_gitlab_base_url")
+@mock.patch("ubi_manifest.app.api.get_gitlab_healthcheck_url")
 @mock.patch("ubi_manifest.app.api.redis.from_url")
 @mock.patch("ubi_manifest.app.api.app.control.inspect")
 def test_status_errors(
     inspect,
     mock_redis,
-    get_gitlab_url,
+    get_gitlab_healthcheck_url,
     client,
     requests_mock,
 ):
@@ -130,13 +133,13 @@ def test_status_errors(
         scheduled=mock.Mock(return_value={"worker01": []}),
     )
     mock_redis.return_value = MockedRedis(data={}, ping_fail=True)
-    get_gitlab_url.return_value = "https://gitlab.com"
+    get_gitlab_healthcheck_url.return_value = "https://gitlab.com/-/health"
 
     requests_mock.get(
         "https://gitlab.com/-/health", status_code=503, reason="Service Unavailable"
     )
     requests_mock.get(
-        "https://some_url/pulp/api/v2/status",
+        "https://pulp_url/pulp/api/v2/status",
         status_code=503,
         reason="Service Unavailable",
     )
@@ -164,7 +167,7 @@ def test_status_errors(
         },
         "connection_to_pulp": {
             "status": "Failed",
-            "msg": "503 Server Error: Service Unavailable for url: https://some_url/pulp/api/v2/status",
+            "msg": "503 Server Error: Service Unavailable for url: https://pulp_url/pulp/api/v2/status",
         },
     }
 
@@ -279,7 +282,7 @@ def test_manifest_get_empty(client, auth_header):
 
 
 def test_manifest_get_not_found(client, auth_header):
-    """test getting depsolved content when the cotent is not available for given repo_id"""
+    """test getting depsolved content when the content is not available for given repo_id"""
     with mock.patch("ubi_manifest.app.api.redis.from_url") as mock_redis_from_url:
         mock_redis_from_url.return_value = MockedRedis(data={})
         response = client.get(
@@ -292,36 +295,48 @@ def test_manifest_get_not_found(client, auth_header):
         assert json_data["detail"] == "Content for ubi_repo_id not found"
 
 
+@mock.patch("ubi_manifest.app.utils.get_content_config_paths")
 @mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
 @mock.patch("ubi_manifest.worker.utils.Client")
 @mock.patch("celery.app.task.Task.apply_async")
 def test_manifest_post_full_dep(
-    mocked_apply_async, pulp_client, get_loader, client, pulp, auth_header
+    mocked_apply_async,
+    pulp_client,
+    get_loader,
+    get_content_config_paths,
+    client,
+    pulp,
+    auth_header,
 ):
     """test request for depsolving for given repo ids where we use full depsolving"""
     mocked_apply_async.side_effect = [
         MockAsyncResult(task_id="foo-bar-id-1", state="PENDING"),
         MockAsyncResult(task_id="foo-bar-id-2", state="PENDING"),
     ]
-    configs = create_mock_configs(3)
-    get_loader.return_value = mock.Mock(load_all=mock.Mock(return_value=configs))
+    get_content_config_paths.return_value = ["url_or_dir_1", "url_or_dir_2"]
+    ubi_configs = create_mock_configs(3, prefix="ubi")
+    ct_configs = create_mock_configs(3, prefix="client-tools")
+    get_loader.side_effect = [
+        mock.Mock(load_all=mock.Mock(return_value=ubi_configs)),
+        mock.Mock(load_all=mock.Mock(return_value=ct_configs)),
+    ]
     create_and_insert_repo(
         id="ubi_repo_1",
-        content_set="content_set_0",
+        content_set="ubi_content_set_0",
         ubi_population=True,
         arch="arch1",
         pulp=pulp,
     )
     create_and_insert_repo(
         id="ubi_repo_2",
-        content_set="content_set_1",
+        content_set="ubi_content_set_1",
         ubi_population=True,
         arch="arch1",
         pulp=pulp,
     )
     create_and_insert_repo(
         id="ubi_repo_3",
-        content_set="content_set_2",
+        content_set="ubi_content_set_2",
         ubi_population=True,
         arch="arch2",
         pulp=pulp,
@@ -359,31 +374,44 @@ def test_manifest_post_full_dep(
     assert json_data[1]["state"] == "PENDING"
 
 
+@mock.patch("ubi_manifest.app.utils.get_content_config_paths")
 @mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
 @mock.patch("ubi_manifest.worker.utils.Client")
 @mock.patch("celery.app.task.Task.apply_async")
 def test_manifest_post_not_full_dep(
-    mocked_apply_async, pulp_client, get_loader, client, pulp, auth_header
+    mocked_apply_async,
+    pulp_client,
+    get_loader,
+    get_content_config_paths,
+    client,
+    pulp,
+    auth_header,
 ):
     """test request for depsolving for given repo ids where we do not use full depsolving"""
     mocked_apply_async.side_effect = [
         MockAsyncResult(task_id="foo-bar-id-1", state="PENDING"),
         MockAsyncResult(task_id="foo-bar-id-2", state="PENDING"),
     ]
-    configs = create_mock_configs(
-        2, flags=[{"base_pkgs_only": True}, {"base_pkgs_only": True}]
+    get_content_config_paths.return_value = ["url_or_dir_1", "url_or_dir_2"]
+    ct_configs = create_mock_configs(
+        2, flags={"base_pkgs_only": True}, prefix="client-tools"
     )
-    get_loader.return_value = mock.Mock(load_all=mock.Mock(return_value=configs))
+    get_loader.side_effect = [
+        # Empty list also tests the case when a defined repo
+        # doesn't contain any suitable content config
+        mock.Mock(load_all=mock.Mock(return_value=[])),
+        mock.Mock(load_all=mock.Mock(return_value=ct_configs)),
+    ]
     create_and_insert_repo(
         id="client-tools_repo_1",
-        content_set="content_set_0",
+        content_set="client-tools_content_set_0",
         ubi_population=True,
         arch="arch1",
         pulp=pulp,
     )
     create_and_insert_repo(
         id="client-tools_repo_2",
-        content_set="content_set_1",
+        content_set="client-tools_content_set_1",
         ubi_population=True,
         arch="arch1",
         pulp=pulp,
@@ -415,13 +443,21 @@ def test_manifest_post_not_full_dep(
     assert json_data[1]["state"] == "PENDING"
 
 
+@mock.patch("ubi_manifest.app.utils.get_content_config_paths")
 @mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
 @mock.patch("ubi_manifest.worker.utils.Client")
 @mock.patch("celery.app.task.Task.apply_async")
 def test_manifest_post_no_depsolve_items(
-    mocked_apply_async, pulp_client, get_loader, client, pulp, auth_header
+    mocked_apply_async,
+    pulp_client,
+    get_loader,
+    get_content_config_paths,
+    client,
+    pulp,
+    auth_header,
 ):
     """test request for depsolving for given repo ids, but no depsolve items are identified"""
+    get_content_config_paths.return_value = ["url_or_dir_1"]
     get_loader.return_value = mock.Mock(
         load_all=mock.Mock(return_value=create_mock_configs(3))
     )
@@ -450,62 +486,6 @@ def test_manifest_post_no_depsolve_items(
     assert (
         json_data["detail"]
         == "No depsolve items were identified for ['ubi_repo_not_allowed']."
-    )
-
-
-@mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@mock.patch("ubi_manifest.worker.utils.Client")
-@mock.patch("celery.app.task.Task.apply_async")
-def test_manifest_post_more_repo_classes(
-    mocked_apply_async, pulp_client, get_loader, client, auth_header
-):
-    """test request for depsolving for given repo ids, which are from different repo classes"""
-    response = client.post(
-        "/api/v1/manifest",
-        json={"repo_ids": ["ubi_repo", "client-tools_repo"]},
-        headers=auth_header(roles=["creator"]),
-    )
-    # The request has finished before any calls on pulp client or ubiconfig were made because
-    # repos from two different classes were in the request.
-    mocked_apply_async.assert_not_called()
-    pulp_client.assert_not_called()
-    get_loader.assert_not_called()
-    # expected status code is 400
-    assert response.status_code == 400
-    # there is enough detail info in the response
-    json_data = response.json()
-    assert (
-        json_data["detail"]
-        == "Can't process repos from different classes ['ubi', 'client-tools'] in one request. "
-        "Please make separate request for each class."
-    )
-
-
-@mock.patch("ubi_manifest.app.utils.ubiconfig.get_loader")
-@mock.patch("ubi_manifest.worker.utils.Client")
-@mock.patch("celery.app.task.Task.apply_async")
-def test_manifest_post_wrong_repo_ids(
-    mocked_apply_async, pulp_client, get_loader, client, auth_header
-):
-    """test request for depsolving for given repo ids, which are unexpected."""
-    response = client.post(
-        "/api/v1/manifest",
-        json={"repo_ids": ["some_foreign_repo"]},
-        headers=auth_header(roles=["creator"]),
-    )
-    # The request has finished before any calls on pulp client or ubiconfig were made because
-    # repos from some unknown class were in the request.
-    mocked_apply_async.assert_not_called()
-    pulp_client.assert_not_called()
-    get_loader.assert_not_called()
-    # expected status code is 404
-    assert response.status_code == 404
-    # there is enough detail info in the response
-    json_data = response.json()
-    assert (
-        json_data["detail"]
-        == "Given repos ['some_foreign_repo'] have unexpected ids. It seems they are not "
-        "from any of the accepted repo classes ['ubi', 'client-tools'] defined in content config."
     )
 
 

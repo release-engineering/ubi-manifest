@@ -16,7 +16,7 @@ from .models import (
     StatusResult,
     TaskState,
 )
-from .utils import get_gitlab_base_url, get_items_for_depsolving, get_repo_classes
+from .utils import get_gitlab_healthcheck_url, get_items_for_depsolving
 
 REQUEST_TIMEOUT = 20
 
@@ -101,18 +101,15 @@ def status() -> StatusResult:
             "msg": "No heartbeat task ran yet. Wait a minute.",
         }
 
-    # Gitlab is used only if the content configs are loaded from Gitlab.
-    # In case the configs are loaded from directory, connection to Gitlab
-    # is not needed, therefore not checked.
-    gitlab_base_url = get_gitlab_base_url(app.conf.content_config)
-    if gitlab_base_url:
+    # GitLab is used only if the CDN definitions or content configs are loaded
+    # from it. In case both the definitions and the configs are loaded from directory,
+    # connection to GitLab is not needed, therefore not checked.
+    gitlab_hc_url = get_gitlab_healthcheck_url()
+    if gitlab_hc_url:
         try:
-            gitlab_resp = requests.get(
-                f"{gitlab_base_url}/-/health",
-                timeout=REQUEST_TIMEOUT,
-            )
-            gitlab_status = {"status": gitlab_resp.reason, "msg": "Gitlab available."}
+            gitlab_resp = requests.get(gitlab_hc_url, timeout=REQUEST_TIMEOUT)
             gitlab_resp.raise_for_status()
+            gitlab_status = {"status": gitlab_resp.reason, "msg": "Gitlab available."}
         except Exception as ex:  # pylint: disable=broad-except
             gitlab_status = {"status": "Failed", "msg": str(ex)}
     else:
@@ -177,25 +174,7 @@ def manifest_post(depsolve_item: DepsolveItem) -> list[TaskState]:
             detail="No repo IDs were provided.",
         )
 
-    repo_classes = get_repo_classes(app.conf.content_config, depsolve_item.repo_ids)
-    # we expect exactly one repo class in one request
-    if len(repo_classes) > 1:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Can't process repos from different classes {repo_classes} "
-            "in one request. Please make separate request for each class.",
-        )
-    if len(repo_classes) == 0:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Given repos {depsolve_item.repo_ids} have unexpected ids. "
-            "It seems they are not from any of the accepted repo classes "
-            f"{list(app.conf.content_config.keys())} defined in content config.",
-        )
-
-    depsolve_items = get_items_for_depsolving(
-        app.conf, depsolve_item.repo_ids, repo_classes[0]
-    )
+    depsolve_items = get_items_for_depsolving(app.conf, depsolve_item.repo_ids)
     if not depsolve_items:
         raise HTTPException(
             status_code=404,

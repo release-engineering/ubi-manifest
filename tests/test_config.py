@@ -1,13 +1,56 @@
 import configparser
 import os
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from celery import Celery
 
-from ubi_manifest.worker.tasks.config import make_config
+from ubi_manifest.worker.tasks.config import make_config, validate_url_or_path
 
 TEST_CONF_FILE = os.path.join(os.path.dirname(__file__), "data/conf/test.conf")
+
+
+@pytest.mark.parametrize(
+    "url_or_path",
+    [
+        "http://example.com/foo",
+        "https://example.com/foo",
+        "/some/path/foo",
+        "./relative/path/foo",
+    ],
+)
+def test_validate_url_or_path(url_or_path):
+    attr = Mock(name="url_or_path")
+    assert validate_url_or_path(None, attr, url_or_path) is None
+
+
+@pytest.mark.parametrize(
+    "url_or_path",
+    [
+        "http://example^com/foo",
+        "https://example^com/foo",
+        "/some/path/\x00foo",
+    ],
+)
+def test_validate_url_or_path_invalid(url_or_path):
+    attr = Mock(name="url_or_path")
+    with pytest.raises(ValueError):
+        validate_url_or_path(None, attr, url_or_path)
+
+
+def test_validate_config_sources():
+    config_from_file = configparser.ConfigParser()
+    config_from_file.read(TEST_CONF_FILE)
+    del config_from_file["CONFIG"]["content_config"]
+    del config_from_file["CONFIG"]["cdn_definitions_url"]
+
+    with patch("ubi_manifest.worker.tasks.config.configparser.ConfigParser") as config:
+        config.return_value = config_from_file
+        celery_app = Celery()
+        with pytest.raises(
+            ValueError, match=f"'content_config' or both 'cdn_definitions_url'"
+        ):
+            make_config(celery_app)
 
 
 def test_make_config():
@@ -28,7 +71,10 @@ def test_make_config():
             "ubi": "https://gitlab.foo.bar.com/ubi-config",
             "client-tools": "https://gitlab.foo.bar.com/ct-config",
         }
-        assert celery_app.conf["allowed_ubi_repo_groups"] == {}
+        assert celery_app.conf["cdn_definitions_url"] == (
+            "https://gitlab.foo.bar.com/cdn-definitions.yaml"
+        )
+        assert celery_app.conf["cdn_definitions_env"] == "test"
 
         # check properly converted fields to int types
         assert celery_app.conf["publish_limit"] == 2
@@ -41,7 +87,7 @@ def test_make_config():
         ("pulp_username", "fo o"),
         ("content_config", '{"ubi": "https://ubi..!!"}'),
         ("content_config", '{"ubi??": "https://ubi"}'),
-        ("allowed_ubi_repo_groups", '{"ubiX:test": ["repo??"]}'),
+        ("cdn_definitions_url", "https://ubi..!!"),
     ],
 )
 def test_config_wrong_attributes(option, value):

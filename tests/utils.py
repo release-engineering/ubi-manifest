@@ -12,21 +12,21 @@ def create_and_insert_repo(**kwargs):
     return pulp.client.get_repository(kwargs["id"])
 
 
-def create_mock_configs(n, flags=None, versions=None):
+def create_mock_configs(n, flags=None, prefix=""):
     """
     Creates n mock config objects with the given flags.
     """
     configs = []
     if not flags:
-        flags = [{} for _i in range(n)]
-    if not versions:
-        versions = ["8" for _i in range(n)]
+        flags = {}
+    if prefix:
+        prefix += "_"
 
     for i in range(n):
         config = Mock(
-            version=versions[i],
-            flags=Mock(as_dict=Mock(return_value=flags[i])),
-            content_sets=Mock(rpm=Mock(output=f"content_set_{i}")),
+            version="8",
+            flags=Mock(as_dict=Mock(return_value=flags)),
+            content_sets=Mock(rpm=Mock(output=f"{prefix}content_set_{i}")),
         )
         configs.append(config)
 
