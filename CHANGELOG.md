@@ -9,4 +9,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - n/a
 
-[Unreleased]: https://github.com/release-engineering/ubi-manifest/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/release-engineering/ubi-manifest/compare/v0.0.1...HEAD<!-- ci test 2 -->
