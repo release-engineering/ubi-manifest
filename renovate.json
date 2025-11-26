@@ -14,7 +14,7 @@
       "enabled": false
     },
     {
-      "matchPackageNames": ["pylint"],
+      "matchPackageNames": ["pylint", "pre-commit"],
       "enabled": false
     }
   ],
