@@ -45,9 +45,9 @@ requests-mock = "*"
 optional = true
 
 [tool.poetry.group.dev.dependencies]
-black = "25.9.0"
+black = "25.11.0"
 pre-commit = "<4"
-mypy = "1.18.2"
+mypy = "1.19.0"
 pylint = "==3.3.9"
 pytest-cov = "7.0.0"
 uvicorn = {version = "0.38.0", extras = ["standard"]}
