@@ -14,7 +14,7 @@
       "enabled": false
     },
     {
-      "matchPackageNames": ["pylint", "pre-commit"],
+      "matchPackageNames": ["pylint", "pre-commit", "uvicorn"],
       "enabled": false
     }
   ],
