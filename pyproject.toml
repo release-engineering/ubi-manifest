@@ -47,7 +47,7 @@ optional = true
 [tool.poetry.group.dev.dependencies]
 black = "25.11.0"
 pre-commit = "<4"
-mypy = "1.19.0"
+mypy = "1.19.1"
 pylint = "==3.3.9"
 pytest-cov = "7.0.0"
 uvicorn = {version = "0.39.0", extras = ["standard"]}
