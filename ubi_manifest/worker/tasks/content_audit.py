@@ -40,7 +40,10 @@ def content_audit_task() -> None:
     This task checks that all available content is up-to-date, that whitelisted
     content is present, and that blacklisted content is absent.
     """
-    config_loaders = [UbiConfigLoader(config.get("source"), config.get("branch_prefix", None)) for config in get_content_configs()]
+    config_loaders = [
+        UbiConfigLoader(config.get("source"), config.get("branch_prefix", None))
+        for config in get_content_configs()
+    ]
 
     with make_pulp_client(app.conf) as client:
         out_repos_bundles = fetch_ubi_repos_bundles(client)

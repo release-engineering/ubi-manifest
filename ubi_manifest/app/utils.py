@@ -44,6 +44,7 @@ def get_content_config_paths() -> list[str]:
     _LOG.info("Loaded %d content config URL(s): %s", len(urls), urls)
     return urls
 
+
 def get_content_configs() -> list[dict]:
     if app.conf.cdn_definitions_url:
         _LOG.info(
@@ -51,25 +52,25 @@ def get_content_configs() -> list[dict]:
             app.conf.cdn_definitions_env,
             app.conf.cdn_definitions_url,
         )
-        repo_contents = (load_data(app.conf.cdn_definitions_url)
-                     .get("repo_content_sync", {})
-                     .get(app.conf.cdn_definitions_env, []))
-        content_configs = [
-        {
-            "source": repo_content.get("source", None),
-            "branch_prefix": repo_content.get("branch_prefix", None),
-            "populate_dot_repos": repo_content.get("populate_dot_repos", None)
-        }
-        for repo_content in repo_contents
-    ]
-    else:
+        repo_contents = (
+            load_data(app.conf.cdn_definitions_url)
+            .get("repo_content_sync", {})
+            .get(app.conf.cdn_definitions_env, [])
+        )
         content_configs = [
             {
-                "source": url
+                "source": repo_content.get("source", None),
+                "branch_prefix": repo_content.get("branch_prefix", None),
+                "populate_dot_repos": repo_content.get("populate_dot_repos", None),
             }
-            for url in list(app.conf.content_config.values())
+            for repo_content in repo_contents
+        ]
+    else:
+        content_configs = [
+            {"source": url} for url in list(app.conf.content_config.values())
         ]
     return content_configs
+
 
 def get_items_for_depsolving(
     app_conf: Any, repo_ids: list[str]
@@ -126,7 +127,7 @@ def get_items_from_groups(
     return items
 
 
-def get_configs(url: str, branch_prefix: str=None) -> Any:
+def get_configs(url: str, branch_prefix: str = None) -> Any:
     """
     Returns configs from the given url.
     """
