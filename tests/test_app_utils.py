@@ -157,8 +157,12 @@ def test_get_repo_groups_mixed_dot_repos(pulp):
     result = utils.get_repo_groups(pulp.client, configs)
     assert result == {
         "8-aarch64-default": {"ubi8_repo1_for_aarch64", "ubi8_repo2_for_aarch64"},
-        "8-aarch64-0": {"ubi8_repo1_for_aarch64__8_DOT_0", "ubi8_repo2_for_aarch64__8_DOT_0"},
+        "8-aarch64-0": {
+            "ubi8_repo1_for_aarch64__8_DOT_0",
+            "ubi8_repo2_for_aarch64__8_DOT_0",
+        },
     }
+
 
 @pytest.mark.parametrize(
     "definitions_path,configs_path,expected_result",
