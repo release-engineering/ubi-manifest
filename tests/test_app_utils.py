@@ -79,7 +79,10 @@ def test_check_and_get_flag_error():
         utils.check_and_get_flag(configs, "url")
 
 
-def test_get_repo_groups(pulp):
+def test_get_repo_groups_default_repos_only(pulp):
+    """
+    Test for mainline/default repos only.
+    """
     configs = create_mock_configs(4)
     create_and_insert_repo(
         id="ubi8_repo1_for_aarch64",
@@ -112,10 +115,50 @@ def test_get_repo_groups(pulp):
 
     result = utils.get_repo_groups(pulp.client, configs)
     assert result == {
-        "8-aarch64": {"ubi8_repo1_for_aarch64", "ubi8_repo2_for_aarch64"},
-        "8-x86_64": {"ubi8_repo1_for_x86_64"},
+        "8-aarch64-default": {"ubi8_repo1_for_aarch64", "ubi8_repo2_for_aarch64"},
+        "8-x86_64-default": {"ubi8_repo1_for_x86_64"},
     }
 
+
+def test_get_repo_groups_mixed_dot_repos(pulp):
+    """
+    Test for mixed dot and mainline/default repos.
+    """
+    configs = create_mock_configs(2)
+    create_and_insert_repo(
+        id="ubi8_repo1_for_aarch64",
+        content_set="content_set_0",
+        ubi_population=True,
+        arch="aarch64",
+        pulp=pulp,
+    )
+    create_and_insert_repo(
+        id="ubi8_repo2_for_aarch64",
+        content_set="content_set_1",
+        ubi_population=True,
+        arch="aarch64",
+        pulp=pulp,
+    )
+    create_and_insert_repo(
+        id="ubi8_repo1_for_aarch64__8_DOT_0",
+        content_set="content_set_0",
+        ubi_population=True,
+        arch="aarch64",
+        pulp=pulp,
+    )
+    create_and_insert_repo(
+        id="ubi8_repo2_for_aarch64__8_DOT_0",
+        content_set="content_set_1",
+        ubi_population=True,
+        arch="aarch64",
+        pulp=pulp,
+    )
+
+    result = utils.get_repo_groups(pulp.client, configs)
+    assert result == {
+        "8-aarch64-default": {"ubi8_repo1_for_aarch64", "ubi8_repo2_for_aarch64"},
+        "8-aarch64-0": {"ubi8_repo1_for_aarch64__8_DOT_0", "ubi8_repo2_for_aarch64__8_DOT_0"},
+    }
 
 @pytest.mark.parametrize(
     "definitions_path,configs_path,expected_result",
