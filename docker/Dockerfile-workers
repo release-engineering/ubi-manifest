@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/python-39:latest@sha256:792a7f419c5a9d2042f3b9be5ddcb649e4562681bd784c9dcc7f3f3b4d49d341
+FROM registry.access.redhat.com/ubi9/python-39:latest@sha256:367b7bfa98e2692c79369620eda1b33a821d625cbfecc7e6dc5262f03f53b9a2
 
 LABEL maintainer="Red Hat - EXD"
 
