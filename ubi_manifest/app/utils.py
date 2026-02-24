@@ -155,8 +155,16 @@ def get_repo_groups(client: Client, configs: list[Any]) -> dict[str, set[str]]:
     for config in configs:
         repos = get_repo_ids_from_cs(client, config.content_sets.rpm.output)
         for repo in repos:
-            # Create groups by version and architecture
-            group_key = f"{config.version}-{repo.arch}"
+            # fix for 'DOT' repositories which can't be grouped with mainline ones
+            if "_DOT_" in repo.id:
+                rest = repo.id.split("_DOT_")[1]
+            else:
+                rest = "default"
+
+            # Create groups by version, architecture and rest string,
+            # group_key is just a helper string for correct grouping
+            # in output dict
+            group_key = f"{config.version}-{repo.arch}-{rest}"
             repo_groups.setdefault(group_key, set()).add(repo.id)
 
     return repo_groups
