@@ -9,7 +9,7 @@ from .utils import create_and_insert_repo, create_mock_configs
 
 @patch("ubi_manifest.app.utils.load_data")
 @patch("ubi_manifest.app.utils.app")
-def test_get_content_config_paths_from_cdn_definitions(mock_app, load_data):
+def test_get_content_configs_from_cdn_definitions(mock_app, load_data):
     mock_app.conf.cdn_definitions_env = "ci"
     load_data.return_value = {
         "repo_content_sync": {
@@ -18,19 +18,58 @@ def test_get_content_config_paths_from_cdn_definitions(mock_app, load_data):
         }
     }
 
-    result = utils.get_content_config_paths()
+    result = utils.get_content_configs()
 
-    assert result == ["foo", "bar"]
+    assert result == [
+        {"source": "foo", "branch_prefix": None},
+        {"source": "bar", "branch_prefix": None},
+    ]
 
 
 @patch("ubi_manifest.app.utils.app")
-def test_get_content_config_paths_from_content_config(mock_app):
+def test_get_content_configs_from_content_config(mock_app):
     mock_app.conf.cdn_definitions_url = None
     mock_app.conf.content_config = {"ubi": "baz", "client-tools": "quux"}
 
-    result = utils.get_content_config_paths()
+    result = utils.get_content_configs()
 
-    assert result == ["baz", "quux"]
+    assert result == [{"source": "baz"}, {"source": "quux"}]
+
+
+@patch("ubi_manifest.app.utils.load_data")
+@patch("ubi_manifest.app.utils.app")
+def test_get_content_configs_from_cdn_definitions(mock_app, load_data):
+    mock_app.conf.cdn_definitions_env = "ci"
+    mock_app.conf.cdn_definitions_url = "https://cdn-definitions-url"
+    load_data.return_value = {
+        "repo_content_sync": {
+            "ci": [
+                {"source": "foo", "branch_prefix": "prefix1"},
+                {"source": "bar", "branch_prefix": "prefix2"},
+            ],
+            "xx": [{"source": "baz"}],
+        }
+    }
+
+    result = utils.get_content_configs()
+
+    assert result == [
+        {"source": "foo", "branch_prefix": "prefix1"},
+        {"source": "bar", "branch_prefix": "prefix2"},
+    ]
+
+
+@patch("ubi_manifest.app.utils.app")
+def test_get_content_configs_from_content_config(mock_app):
+    mock_app.conf.cdn_definitions_url = None
+    mock_app.conf.content_config = {"ubi": "baz", "client-tools": "quux"}
+
+    result = utils.get_content_configs()
+
+    assert result == [
+        {"source": "baz"},
+        {"source": "quux"},
+    ]
 
 
 def test_get_items_from_groups():
@@ -174,26 +213,29 @@ def test_get_repo_groups_mixed_dot_repos(pulp):
         ),
         (
             "/path/to/cdn-definitions.yaml",
-            ["https://gitlab.com/ubi", "https://gitlab.com/client-tools"],
+            [
+                {"source": "https://gitlab.com/ubi"},
+                {"source": "https://gitlab.com/client-tools"},
+            ],
             "https://gitlab.com/-/health",
         ),
         (
             "/path/to/cdn-definitions.yaml",
-            ["/path/to/ubi/", ".path/to/client-tools/"],
+            [{"source": "/path/to/ubi/"}, {"source": ".path/to/client-tools/"}],
             None,
         ),
     ],
 )
-@patch("ubi_manifest.app.utils.get_content_config_paths")
+@patch("ubi_manifest.app.utils.get_content_configs")
 @patch("ubi_manifest.app.utils.app")
 def test_get_gitlab_healthcheck_url(
     mock_app,
-    mock_get_content_config_paths,
+    get_content_configs,
     definitions_path,
     configs_path,
     expected_result,
 ):
     mock_app.conf.cdn_definitions_url = definitions_path
-    mock_get_content_config_paths.return_value = configs_path
+    get_content_configs.return_value = configs_path
     result = utils.get_gitlab_healthcheck_url()
     assert result == expected_result
