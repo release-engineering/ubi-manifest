@@ -32,7 +32,7 @@ class UbiConfigLoader:
 
     def _load_all(self) -> Any:
         loader = ubiconfig.get_loader(
-            source=self._url_or_dir, branch_prefix=self._branch_prefix 
+            source=self._url_or_dir, branch_prefix=self._branch_prefix
         )
         return loader.load_all()
 
