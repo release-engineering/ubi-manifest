@@ -258,14 +258,14 @@ uvloop = ["uvloop (>=0.15.2)"]
 
 [[package]]
 name = "cdn-definitions"
-version = "3.4.1"
+version = "3.5.1"
 description = "Data definitions for Red Hat's content delivery network"
 optional = false
 python-versions = "*"
 groups = ["main"]
 files = [
-    {file = "cdn-definitions-3.4.1.tar.gz", hash = "sha256:2428753543b6b559b2ace9b1160d1a672f4a83d062bbd8b0e9904b737feb7db5"},
-    {file = "cdn_definitions-3.4.1-py3-none-any.whl", hash = "sha256:d3bb0bccc07916423b96e37dc881794fe62565d5283e5713b410f6d53631ce89"},
+    {file = "cdn_definitions-3.5.1-py3-none-any.whl", hash = "sha256:7142a4d071206f4fb36e3b364c8a9d7f884d25a5432bf86db4cfb69898c7f349"},
+    {file = "cdn_definitions-3.5.1.tar.gz", hash = "sha256:5fc112ef7c6a399bee0ce3352ab33be5c1b1c0ee1fef35d6933bf43aaa19a6a6"},
 ]
 
 [package.dependencies]
@@ -3577,14 +3577,14 @@ devenv = ["check-manifest", "pytest (>=4.3)", "pytest-cov", "pytest-mock (>=3.3)
 
 [[package]]
 name = "ubi-config"
-version = "3.2.2"
+version = "3.3.0"
 description = "A Python Library for accessing Universal Base Image configuration"
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "ubi_config-3.2.2-py3-none-any.whl", hash = "sha256:f4da2d8f94faef5687767a3416fbf335c064b3ab3fae66f720b1027f52831807"},
-    {file = "ubi_config-3.2.2.tar.gz", hash = "sha256:99d1b8523e4c72e5c1428a0c3c9e68b1ebc87b7c96dfa394fd3f5a3102c3c610"},
+    {file = "ubi_config-3.3.0-py3-none-any.whl", hash = "sha256:a5d4c916257435a50d1fcbe62b1c4992555b0009e62a137d13da59a1737dcbdf"},
+    {file = "ubi_config-3.3.0.tar.gz", hash = "sha256:206bf9523a090f137afbee7508a60a0c3d419dbd1fc785228c1f742c49859621"},
 ]
 
 [package.dependencies]

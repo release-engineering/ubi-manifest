@@ -16,33 +16,42 @@ class FlagInconsistencyError(ValueError):
     pass
 
 
-def get_content_config_paths() -> list[str]:
+def get_content_configs() -> list[dict]:
     """
-    Returns a list of content config paths or URLs loaded from cdn-definitions
-    or `content_config` configuration property.
+    Returns list of content config parameters loaded from cdn-definitions.
 
     The definitions URL and environment are determined by `cdn_definitions_url`
-    and `cdn_definitions_env` in app.conf. The paths or URLs are extracted from
+    and `cdn_definitions_env` in app.conf. Configurations are extracted from
     the 'repo_content_sync' key in the data returned by `cdn_definitions.load_data()`.
     If no `cdn_definitions_url` is set, the content config paths or URLs defined
     in `content_config` are returned instead.
+
+    :return: Returns list of configurations as dictionary.
+    ```
+        [
+            {
+                "source": "config-url1",
+                "branch_prefix": "optional"
+            }
+        ]
+        ```
     """
     if app.conf.cdn_definitions_url:
         _LOG.info(
-            "Loading content config URLs for environment '%s' from '%s'",
+            "Loading content configs for environment '%s' from '%s'",
             app.conf.cdn_definitions_env,
             app.conf.cdn_definitions_url,
         )
-        urls = [
-            item["source"]
-            for item in load_data(app.conf.cdn_definitions_url)
+        repo_contents = (
+            load_data(app.conf.cdn_definitions_url)
             .get("repo_content_sync", {})
             .get(app.conf.cdn_definitions_env, [])
-        ]
+        )
     else:
-        urls = list(app.conf.content_config.values())
-    _LOG.info("Loaded %d content config URL(s): %s", len(urls), urls)
-    return urls
+        repo_contents = [
+            {"source": url} for url in list(app.conf.content_config.values())
+        ]
+    return repo_contents
 
 
 def get_items_for_depsolving(
@@ -56,8 +65,11 @@ def get_items_for_depsolving(
 
     with make_pulp_client(app_conf) as client:
         # Try each config URL to find matching repos
-        for config_url in get_content_config_paths():
-            configs = get_configs(config_url)
+        content_sync_configs = get_content_configs()
+        for config in content_sync_configs:
+            config_url = str(config.get("source"))
+            config_branch = config.get("branch_prefix", None)
+            configs = get_configs(config_url, config_branch)
             if not configs:
                 continue
 
@@ -97,13 +109,13 @@ def get_items_from_groups(
     return items
 
 
-def get_configs(url: str) -> Any:
+def get_configs(url: str, branch_prefix: str = None) -> Any:
     """
     Returns configs from the given url.
     """
     _LOG.info("Loading config from %s", url)
 
-    loader = ubiconfig.get_loader(url)
+    loader = ubiconfig.get_loader(source=url, branch_prefix=branch_prefix)
     configs = loader.load_all()
     # Use only configs for major versions
     configs = [conf for conf in configs if "." not in conf.version]
@@ -197,7 +209,8 @@ def get_gitlab_healthcheck_url() -> Optional[str]:
         return f"{parsed.scheme}://{parsed.netloc}/-/health"
 
     # CDN definitions were loaded from a file, check if any sync repo is on GitLab
-    for config_path in get_content_config_paths():
+    for configs in get_content_configs():
+        config_path = configs.get("source")
         parsed = urlparse(config_path)
         # If there is a scheme, content config is loaded from an URL, so
         # we assume it is a GitLab URL and return its healthcheck URL.
