@@ -314,8 +314,8 @@ def test_manifest_post_full_dep(
         MockAsyncResult(task_id="foo-bar-id-2", state="PENDING"),
     ]
     get_content_configs.return_value = [
-        {"source": "url_or_dir_1"},
-        {"source": "url_or_dir_2"},
+        {"source": "url_or_dir_1", "branch_prefix":"foo"},
+        {"source": "url_or_dir_2", "branch_prefix":"bar"},
     ]
     ubi_configs = create_mock_configs(3, prefix="ubi")
     ct_configs = create_mock_configs(3, prefix="client-tools")
@@ -362,8 +362,8 @@ def test_manifest_post_full_dep(
     # present in 'ubi_repo_2'.
     mocked_apply_async.assert_has_calls(
         [
-            mock.call(args=[["ubi_repo_1", "ubi_repo_2"], "url_or_dir_1"]),
-            mock.call(args=[["ubi_repo_3"], "url_or_dir_1"]),
+            mock.call(args=[["ubi_repo_1", "ubi_repo_2"], "url_or_dir_1", 'foo']),
+            mock.call(args=[["ubi_repo_3"], "url_or_dir_1", 'foo']),
         ]
     )
     # expected status code is 201
@@ -396,8 +396,8 @@ def test_manifest_post_not_full_dep(
         MockAsyncResult(task_id="foo-bar-id-2", state="PENDING"),
     ]
     get_content_configs.return_value = [
-        {"source": "url_or_dir_1"},
-        {"source": "url_or_dir_2"},
+        {"source": "url_or_dir_1", "branch_prefix":"foo"},
+        {"source": "url_or_dir_2", "branch_prefix":"bar"},
     ]
     ct_configs = create_mock_configs(
         2, flags={"base_pkgs_only": True}, prefix="client-tools"
@@ -434,8 +434,8 @@ def test_manifest_post_not_full_dep(
     # determined and the depsolving is performed separately for each repo.
     mocked_apply_async.assert_has_calls(
         [
-            mock.call(args=[["client-tools_repo_1"], "url_or_dir_2"]),
-            mock.call(args=[["client-tools_repo_2"], "url_or_dir_2"]),
+            mock.call(args=[["client-tools_repo_1"], "url_or_dir_2", 'bar']),
+            mock.call(args=[["client-tools_repo_2"], "url_or_dir_2", 'bar']),
         ]
     )
     # expected status code is 201

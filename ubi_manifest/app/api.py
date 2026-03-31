@@ -183,7 +183,9 @@ def manifest_post(depsolve_item: DepsolveItem) -> list[TaskState]:
 
     tasks_states = []
     for item in depsolve_items:
-        task = depsolve_task.apply_async(args=[item["repo_group"], item["url"]])
+        task = depsolve_task.apply_async(
+            args=[item["repo_group"], item["url"], item.get("branch_prefix", "")]
+        )
         tasks_states.append(TaskState(task_id=task.task_id, state=task.state))
 
     return tasks_states

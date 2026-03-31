@@ -45,7 +45,9 @@ class InconsistentDepsolverConfig(Exception):
 
 
 @app.task  # type: ignore [misc]  # ignore untyped decorator
-def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
+def depsolve_task(
+    ubi_repo_ids: Iterable[str], content_config_url: str, branch_prefix: str = ""
+) -> None:
     """
     Run depsolvers for given ubi_repo_ids - it's expected that id of binary
     repositories are provided. Debuginfo and SRPM repos related to those ones
@@ -56,7 +58,7 @@ def depsolve_task(ubi_repo_ids: Iterable[str], content_config_url: str) -> None:
     (source_repo_id, unit_type, unit_attr, value). Note that value in redis
     is stored as json string.
     """
-    ubi_config_loader = UbiConfigLoader(content_config_url)
+    ubi_config_loader = UbiConfigLoader(content_config_url, branch_prefix)
 
     with make_pulp_client(app.conf) as client:
         depsolver_flags = {}  # (input_cs, ubi_repo_id): {"flag_x": "value"}
