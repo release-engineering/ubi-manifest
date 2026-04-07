@@ -16,7 +16,7 @@ class FlagInconsistencyError(ValueError):
     pass
 
 
-def get_content_configs() -> list[dict]:
+def get_content_configs() -> list[dict[str, Any]]:
     """
     Returns list of content config parameters loaded from cdn-definitions.
 
@@ -68,19 +68,21 @@ def get_items_for_depsolving(
         content_sync_configs = get_content_configs()
         for config in content_sync_configs:
             config_url = str(config.get("source"))
-            config_branch = config.get("branch_prefix", None)
-            configs = get_configs(config_url, config_branch)
+            config_branch_prefix = config.get("branch_prefix", None)
+            configs = get_configs(config_url, config_branch_prefix)
             if not configs:
                 continue
 
             base_pkg_only = check_and_get_flag(configs, config_url)
             if base_pkg_only:
                 items = get_items_not_full_depsolving(
-                    client, configs, repo_ids, config_url
+                    client, configs, repo_ids, config_url, config_branch_prefix
                 )
             else:
                 repo_groups = get_repo_groups(client, configs)
-                items = get_items_from_groups(repo_ids, repo_groups, config_url)
+                items = get_items_from_groups(
+                    repo_ids, repo_groups, config_url, config_branch_prefix
+                )
 
             all_items.extend(items)
 
@@ -89,7 +91,10 @@ def get_items_for_depsolving(
 
 
 def get_items_from_groups(
-    repo_ids: list[str], repo_groups: dict[str, set[str]], config_url: str
+    repo_ids: list[str],
+    repo_groups: dict[str, set[str]],
+    config_url: str,
+    branch_prefix: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """
     Returns a list of items for depsolving based on the given repo groups.
@@ -104,12 +109,15 @@ def get_items_from_groups(
                 break
     # Create items for depsolving
     for repo_group in needed_repo_groups.values():
-        items.append({"repo_group": list(sorted(repo_group)), "url": config_url})
+        item = {"repo_group": list(sorted(repo_group)), "url": config_url}
+        if branch_prefix:
+            item["branch_prefix"] = branch_prefix
+        items.append(item)
 
     return items
 
 
-def get_configs(url: str, branch_prefix: str = None) -> Any:
+def get_configs(url: str, branch_prefix: Optional[str] = None) -> Any:
     """
     Returns configs from the given url.
     """
@@ -137,7 +145,11 @@ def check_and_get_flag(configs: list[Any], url: str) -> Any:
 
 
 def get_items_not_full_depsolving(
-    client: Client, configs: list[Any], repo_ids: list[str], config_url: str
+    client: Client,
+    configs: list[Any],
+    repo_ids: list[str],
+    config_url: str,
+    branch_prefix: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """
     Returns a list of items for depsolving for repos where we don't use full depsolving.
@@ -154,7 +166,10 @@ def get_items_not_full_depsolving(
     # and create items for depsolving for each present repo
     for repo_id in repo_ids:
         if repo_id in pulp_repo_ids:
-            items.append({"repo_group": [repo_id], "url": config_url})
+            item = {"repo_group": [repo_id], "url": config_url}
+            if branch_prefix:
+                item["branch_prefix"] = branch_prefix
+            items.append(item)
     return items
 
 
