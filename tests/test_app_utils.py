@@ -39,7 +39,40 @@ def test_get_content_configs_from_content_config(mock_app):
     ]
 
 
-def test_get_items_from_groups():
+@pytest.mark.parametrize(
+    "branch_prefix,expected",
+    [
+        (
+            None,
+            [
+                {
+                    "repo_group": ["ubi_repo4", "ubi_repo5", "ubi_repo6"],
+                    "url": "https://ubi",
+                },
+                {
+                    "repo_group": ["ubi_repo7", "ubi_repo8", "ubi_repo9"],
+                    "url": "https://ubi",
+                },
+            ],
+        ),
+        (
+            "my-branch",
+            [
+                {
+                    "repo_group": ["ubi_repo4", "ubi_repo5", "ubi_repo6"],
+                    "url": "https://ubi",
+                    "branch_prefix": "my-branch",
+                },
+                {
+                    "repo_group": ["ubi_repo7", "ubi_repo8", "ubi_repo9"],
+                    "url": "https://ubi",
+                    "branch_prefix": "my-branch",
+                },
+            ],
+        ),
+    ],
+)
+def test_get_items_from_groups(branch_prefix, expected):
     repo_groups = {
         "7-aarch64": {"ubi_repo1", "ubi_repo2", "ubi_repo3"},
         "8-aarch64": {"ubi_repo4", "ubi_repo5", "ubi_repo6"},
@@ -47,18 +80,71 @@ def test_get_items_from_groups():
     }
     repo_ids = ["ubi_repo4", "ubi_repo5", "ubi_repo9"]
 
-    result = utils.get_items_from_groups(repo_ids, repo_groups, "https://ubi")
+    result = utils.get_items_from_groups(
+        repo_ids, repo_groups, "https://ubi", branch_prefix
+    )
 
-    assert result == [
-        {
-            "repo_group": ["ubi_repo4", "ubi_repo5", "ubi_repo6"],
-            "url": "https://ubi",
-        },
-        {
-            "repo_group": ["ubi_repo7", "ubi_repo8", "ubi_repo9"],
-            "url": "https://ubi",
-        },
-    ]
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "branch_prefix,expected_items",
+    [
+        (
+            None,
+            [
+                {"repo_group": ["ubi_repo1"], "url": "https://ubi"},
+                {"repo_group": ["ubi_repo2"], "url": "https://ubi"},
+            ],
+        ),
+        (
+            "test-branch",
+            [
+                {
+                    "repo_group": ["ubi_repo1"],
+                    "url": "https://ubi",
+                    "branch_prefix": "test-branch",
+                },
+                {
+                    "repo_group": ["ubi_repo2"],
+                    "url": "https://ubi",
+                    "branch_prefix": "test-branch",
+                },
+            ],
+        ),
+    ],
+)
+def test_get_items_not_full_depsolving(pulp, branch_prefix, expected_items):
+    configs = create_mock_configs(2)
+    create_and_insert_repo(
+        id="ubi_repo1",
+        content_set="content_set_0",
+        ubi_population=True,
+        arch="x86_64",
+        pulp=pulp,
+    )
+    create_and_insert_repo(
+        id="ubi_repo2",
+        content_set="content_set_1",
+        ubi_population=True,
+        arch="x86_64",
+        pulp=pulp,
+    )
+    create_and_insert_repo(
+        id="ubi_repo3",
+        content_set="content_set_other",
+        ubi_population=True,
+        arch="x86_64",
+        pulp=pulp,
+    )
+
+    repo_ids = ["ubi_repo1", "ubi_repo2", "ubi_repo_nonexistent"]
+
+    result = utils.get_items_not_full_depsolving(
+        pulp.client, configs, repo_ids, "https://ubi", branch_prefix
+    )
+
+    assert result == expected_items
 
 
 @patch("ubiconfig.get_loader")
