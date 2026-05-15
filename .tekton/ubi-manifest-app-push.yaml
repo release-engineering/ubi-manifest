@@ -460,7 +460,7 @@ spec:
         value: $(tasks.build-image-index.results.IMAGE_DIGEST)
       - name: ADDITIONAL_TAGS
         value:
-        - "$(tasks.clone-repository.results.commit-timestamp)"
+        - "$(tasks.clone-repository.results.commit-timestamp)-merged"
         - latest
       runAfter:
       - build-image-index
