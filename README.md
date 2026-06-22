@@ -28,14 +28,30 @@ pip install -r requirements-dev.txt
 pre-commit install
 ```
 
+CI/CD 
+-----------
+After a PR is merged, new ubi-manifest-app image is built and pushed to [Quay](https://quay.io/repository/redhat-user-workloads/ubi-manifest-tenant/ubi-manifest-app) via build pipelines under `.tekton` directory.
+This image is tracked in [ubi-manifest-workflows](https://gitlab.cee.redhat.com/exd-guild-ubipop/ubi-manifest-workflows) repo in `latest-quay-image.yaml` file and regularly updated via renovate. The renovate's MR with the updated image digest triggers the downstream Konflux pipelines, defined in that repo. These pipelines then build, test and release the new code automatically.
+
+
 Dev-env setup:
 --------------
 
-For running ubi-manifest related containers one can use provided docker-compose file.
-For successful running of celery tasks, it's required to properly update the config file ./conf/app.conf
-with credentials to pulp and gitlab repository with ubi-config files.
-There are certs prepared in ./conf/certs/ for accessing dependent services, 
-if any different certs are required, copy them to the directory.
+It is also possible to build and run ubi-manifest service locally, using provided `docker-compose.yml` and docker files under `dev-docker/` directory.
+You also need to update the config file `./conf/app.conf`:
+- `pulp_url`: URL to rhsm-pulp instance you want to use
+- `content_config`: dictionary of repo group and URL with respective config files
+- `pulp_<cert|key>`: path to rhsm-pulp cert and key
+
+OR
+- `pulp_<username|password>` rhsm-pulp username and password
+
+**Note**: If you use pulp cert and key, you need to copy them into `./conf/` directory 
+and update the `dev-docker/Dockerfile-app` and `dev-docker/Dockerfile-worker` to also COPY these certs into the build context. The path where the certs are copied must be the same as you put in the `./conf/app.conf`:
+```
+COPY ./conf/my-pulp.crt /etc/ubi_manifest/my-pulp.crt
+COPY ./conf/my-pulp.key /etc/ubi_manifest/my-pulp.key
+```
 
 Then podman-compose can be used for building and running the service:
 ```
