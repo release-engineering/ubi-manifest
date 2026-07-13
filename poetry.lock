@@ -1073,15 +1073,15 @@ standard-no-fastapi-cloud-cli = ["email-validator (>=2.0.0)", "fastapi-cli[stand
 
 [[package]]
 name = "fastapi"
-version = "0.138.1"
+version = "0.139.0"
 description = "FastAPI framework, high performance, easy to learn, fast to code, ready for production"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "python_version >= \"3.10\" and python_version < \"3.12\" or python_version >= \"3.12\""
 files = [
-    {file = "fastapi-0.138.1-py3-none-any.whl", hash = "sha256:b994cae7ba8b82c976a728b544244de31333fa5f7d261f9a1dffe526444cae23"},
-    {file = "fastapi-0.138.1.tar.gz", hash = "sha256:96e3702dce09ee0dce48856135620d3d865ca684a79fe7513fd7b13a12f82862"},
+    {file = "fastapi-0.139.0-py3-none-any.whl", hash = "sha256:cf15e1e9e667ddb0ad63811e60bd11390d1aac838ca4a7a23f421807b2308189"},
+    {file = "fastapi-0.139.0.tar.gz", hash = "sha256:99ab7b2d92223c76d6cf10757ab3f89d45b38267fc20b2a136cf02f6beac3145"},
 ]
 
 [package.dependencies]
@@ -2488,14 +2488,14 @@ dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "requests
 
 [[package]]
 name = "pytest-cov"
-version = "7.0.0"
+version = "7.1.0"
 description = "Pytest plugin for measuring coverage."
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
 files = [
-    {file = "pytest_cov-7.0.0-py3-none-any.whl", hash = "sha256:3b8e9558b16cc1479da72058bdecf8073661c7f57f7d3c5f22a1c23507f2d861"},
-    {file = "pytest_cov-7.0.0.tar.gz", hash = "sha256:33c97eda2e049a0c5298e91f519302a1334c26ac65c1a483d6206fd458361af1"},
+    {file = "pytest_cov-7.1.0-py3-none-any.whl", hash = "sha256:a0461110b7865f9a271aa1b51e516c9a95de9d696734a2f71e3e78f46e1d4678"},
+    {file = "pytest_cov-7.1.0.tar.gz", hash = "sha256:30674f2b5f6351aa09702a9c8c364f6a01c27aae0c1366ae8016160d1efc56b2"},
 ]
 
 [package.dependencies]
@@ -3718,15 +3718,15 @@ test = ["django", "mypy", "pytest (>=7.1)", "pytest-cov", "pytest-django", "sybi
 
 [[package]]
 name = "testfixtures"
-version = "12.2.0"
+version = "12.3.0"
 description = "A collection of helpers and mock objects for unit tests and doc tests."
 optional = false
 python-versions = ">=3.11"
 groups = ["test"]
 markers = "python_version >= \"3.11\""
 files = [
-    {file = "testfixtures-12.2.0-py3-none-any.whl", hash = "sha256:d86f5bb7903871a14394f38f8e05b23058eb402f2d62c536f94423542255434f"},
-    {file = "testfixtures-12.2.0.tar.gz", hash = "sha256:3d20c1834b1308ce2ecbd3d7eafe3c970315163df0f1f491dbf66a6150af6c85"},
+    {file = "testfixtures-12.3.0-py3-none-any.whl", hash = "sha256:da013e07f1e850b4d92ea6045c4a71f49d6ddcaab11c8b29f65ea38ff678aee8"},
+    {file = "testfixtures-12.3.0.tar.gz", hash = "sha256:d807ceb9bdd6ea7cc0663370dd5568339056b35dc15c26effd1ae267e323acf1"},
 ]
 
 [package.dependencies]
@@ -3739,6 +3739,7 @@ mock-backport = ["mock (>=4.0.3)"]
 numpy = ["numpy (>=2.3.2)"]
 pandas = ["pandas (>=2.3.3)"]
 polars = ["polars (>=1.32)"]
+pydantic = ["pydantic (>=2.12.0)"]
 structlog = ["structlog (>=24.3.0)"]
 sybil = ["sybil (>=10.1.0)"]
 toml = ["tomlkit (>=0.10.0)"]
@@ -4583,4 +4584,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9"
-content-hash = "7da4e07e881278cc91c6d951550e4a40a72bf846e1cb923d4f092e7409479ee8"
+content-hash = "58f7166f59b6929342b29b5b3dfe2630ae2a59bffd2fa04e4d68a97afe4298f8"
