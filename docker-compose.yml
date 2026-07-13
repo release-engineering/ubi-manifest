@@ -2,7 +2,7 @@ services:
   redis:
     build:
       context: .
-      dockerfile: ./docker/Dockerfile-broker
+      dockerfile: ./dev-docker/Dockerfile-broker
     ports:
       - 6379:6379
     container_name: ubi-manifest-redis
@@ -10,7 +10,7 @@ services:
   worker:
     build:
       context: .
-      dockerfile: ./docker/Dockerfile-workers
+      dockerfile: ./dev-docker/Dockerfile-workers
     environment:
       - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-bundle.crt
     depends_on:
@@ -19,7 +19,7 @@ services:
   beat:
     build:
       context: .
-      dockerfile: ./docker/Dockerfile-beat
+      dockerfile: ./dev-docker/Dockerfile-beat
     environment:
       - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-bundle.crt
     depends_on:
@@ -29,7 +29,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: ./docker/Dockerfile-app
+      dockerfile: ./dev-docker/Dockerfile-app
     environment:
       - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-bundle.crt
     command:
