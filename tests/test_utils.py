@@ -460,6 +460,8 @@ def test_get_n_latest_from_content_skip_modular_rpms():
             "(    ((( pkgA(xxx) >= 0.1.2 with capA    )))     )",
             {"pkgA(xxx)", "capA"},
         ),
+        # case with package name starting with an operator
+        ("(rpmA if android)", {"rpmA", "android"}),
     ],
 )
 def test_parse_bool_deps(clause, result):
@@ -765,6 +767,12 @@ def test_get_criteria_for_modules():
             RpmDependency(
                 name="test-dep", version="11", release="el10", epoch="0", flags="LT"
             ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            True,
+        ),
+        # flag EQ - equal, but no release in requirement
+        (
+            RpmDependency(name="test-dep", version="10", flags="EQ"),
             RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
             True,
         ),
