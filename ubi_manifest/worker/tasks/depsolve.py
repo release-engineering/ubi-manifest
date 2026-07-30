@@ -2,6 +2,7 @@ import json
 import logging
 from collections import defaultdict
 from collections.abc import Iterable
+from datetime import datetime
 from typing import Any
 
 import redis
@@ -58,6 +59,10 @@ def depsolve_task(
     (source_repo_id, unit_type, unit_attr, value). Note that value in redis
     is stored as json string.
     """
+    # Capture time at the start of the depsolve task, so we can later include
+    # only packages that originate from a fully completed Push
+    # which finished before the depsolving started. See RHELDST-39551.
+    depsolve_task_start_time = datetime.utcnow()
     ubi_config_loader = UbiConfigLoader(content_config_url, branch_prefix)
 
     with make_pulp_client(app.conf) as client:
@@ -158,6 +163,7 @@ def depsolve_task(
             repos_map,
             modulemd_rpm_deps,
             modular_rpm_filenames,
+            depsolve_task_start_time,
             flags,
         )
 
@@ -183,6 +189,7 @@ def depsolve_task(
             repos_map,
             modulemd_rpm_deps,
             modular_rpm_filenames,
+            depsolve_task_start_time,
             flags,
         )
 
@@ -328,12 +335,14 @@ def _run_depsolver(
     repos_map: dict[str, str],
     modulemd_deps: set[str],
     modular_rpm_filenames: set[str],
+    depsolve_task_start_time: datetime,
     flags: dict[str, Any],
 ) -> dict[str, list[UbiUnit]]:
     with Depsolver(
         depsolver_items,
         modulemd_deps,
         modular_rpm_filenames,
+        depsolve_task_start_time,
         **flags,
     ) as depsolver:
         depsolver.run()

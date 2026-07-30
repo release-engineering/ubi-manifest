@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 from collections import defaultdict, deque
+from datetime import datetime
 from itertools import chain
 from logging import getLogger
 from typing import Any, Optional
@@ -107,6 +108,7 @@ def get_n_latest_from_content(
     content: set[UbiUnit],
     blacklist: Optional[list[PackageToExclude]] = None,
     modular_rpms: Optional[set[str]] = None,
+    time_threshold: Optional[datetime] = None,
 ) -> list[UbiUnit]:
     """
     Filters modular, blacklisted, and outdated RPMs from given content.
@@ -120,6 +122,12 @@ def get_n_latest_from_content(
 
         if blacklist and is_blacklisted(item, blacklist):
             continue
+
+        # Include only packages that originate from a fully completed Push
+        if time_threshold:
+            if not item.cdn_published or item.cdn_published > time_threshold:
+                _LOG.debug("Skipping RPM %s from in-progress Push", item.filename)
+                continue
 
         name_rpms_maps.setdefault(item.name, []).append(item)
 
