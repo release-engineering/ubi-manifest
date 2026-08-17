@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 from collections import defaultdict, deque
+from datetime import datetime
 from itertools import chain
 from logging import getLogger
 from typing import Any, Optional
@@ -107,6 +108,7 @@ def get_n_latest_from_content(
     content: set[UbiUnit],
     blacklist: Optional[list[PackageToExclude]] = None,
     modular_rpms: Optional[set[str]] = None,
+    time_threshold: Optional[datetime] = None,
 ) -> list[UbiUnit]:
     """
     Filters modular, blacklisted, and outdated RPMs from given content.
@@ -120,6 +122,12 @@ def get_n_latest_from_content(
 
         if blacklist and is_blacklisted(item, blacklist):
             continue
+
+        # Include only packages that originate from a fully completed Push
+        if time_threshold:
+            if not item.cdn_published or item.cdn_published > time_threshold:
+                _LOG.debug("Skipping RPM %s from in-progress Push", item.filename)
+                continue
 
         name_rpms_maps.setdefault(item.name, []).append(item)
 
@@ -141,26 +149,26 @@ def parse_bool_deps(bool_dependency: str) -> set[RpmDependency]:
     out = set()
 
     for item in to_parse:
-        # skip item immediately apearing after num operator
+        # skip item immediately appearing after num operator
         if skip_next:
             skip_next = False
             continue
         # skip operator
-        if re.match(OPERATOR_BOOL_REGEX, item):
+        if re.fullmatch(OPERATOR_BOOL_REGEX, item):
             continue
 
         # after num operator there is usually evr, we want to skip that as well
         if re.match(OPERATOR_NUM_REGEX, item):
             skip_next = True
             continue
-        # remove all starting and ending paranthesis there can some left when using nesting
+        # remove all starting and ending parenthesis left from nesting
         item = re.sub(OPEN_END_ONE_OR_MORE_PAR_REGEX, "", item)
         # after all substitutions we ended with empty string, continue to the next item
         if not item:
             continue
         # if there is wanted opening parenthesis in item, let's add ending parenthesis
         # which we removed in the previous step
-        # in order not to brake the item name
+        # in order not to break the item name
         if "(" in item:
             item += ")"
 
@@ -209,7 +217,9 @@ def is_requirement_resolved(req: RpmDependency, provider: RpmDependency) -> Any:
     """
     if req.flags:
         req_evr = (req.epoch, req.version, req.release)
-        prov_evr = (provider.epoch, provider.version, provider.release)
+        # when req has no release, exclude release from comparison so any release satisfies it
+        prov_release = None if req.release is None else provider.release
+        prov_evr = (provider.epoch, provider.version, prov_release)
         # compare provider with requirement
         out = RELATION_CMP_MAP[req.flags](prov_evr, req_evr)
 

@@ -1,3 +1,5 @@
+import datetime
+
 from pubtools.pulplib import Distributor, ModulemdUnit, RpmDependency, RpmUnit
 from testfixtures import LogCapture
 
@@ -10,7 +12,7 @@ from .utils import create_and_insert_repo, rpmdeps_from_names
 
 def test_resolve_rpms(pulp):
     """tests querying for provides in pulp"""
-    depsolver = Depsolver(None, None, None)
+    depsolver = Depsolver(None, None, None, None)
     depsolver._unsolved_rpms = {RpmDependency(name="gcc")}
 
     repo = create_and_insert_repo(id="test_repo_id", pulp=pulp)
@@ -42,7 +44,7 @@ def test_resolve_rpms(pulp):
 
 def test_resolve_files(pulp):
     """tests querying for files in pulp"""
-    depsolver = Depsolver(None, None, None)
+    depsolver = Depsolver(None, None, None, None)
     depsolver._unsolved_files = {RpmDependency(name="/some/script")}
 
     repo = create_and_insert_repo(id="test_repo_id", pulp=pulp)
@@ -76,7 +78,7 @@ def test_resolve_files(pulp):
 
 def test_extract_and_resolve():
     """test extracting provides and requires from RPM units"""
-    depsolver = Depsolver(None, None, None)
+    depsolver = Depsolver(None, None, None, None)
 
     # set initial data to depsolver instance
     depsolver._required_rpms = rpmdeps_from_names("pkg_a", "pkg_b")
@@ -124,7 +126,7 @@ def test_extract_and_resolve():
 
 def test_get_base_packages(pulp):
     """test queries for input packages for given repo"""
-    depsolver = Depsolver(None, None, None)
+    depsolver = Depsolver(None, None, None, None)
 
     repo = create_and_insert_repo(id="test_repo_id", pulp=pulp)
 
@@ -170,7 +172,7 @@ def test_get_base_packages(pulp):
 
 def test_get_pkgs_from_all_modules(pulp):
     """tests getting pkgs filenames from all available modulemd units"""
-    depsolver = Depsolver(None, None, None)
+    depsolver = Depsolver(None, None, None, None)
 
     repo = create_and_insert_repo(id="test_repo_1", pulp=pulp)
 
@@ -250,12 +252,14 @@ def test_run(pulp):
     }
 
     modular_filenames = set()
+    time_threshold = datetime.datetime(2026, 6, 30, 21, 18, 31)
 
     with LogCapture() as mock_log:
         with Depsolver(
             [dep_item_1, dep_item_2],
             module_rpms,
             modular_filenames,
+            time_threshold,
         ) as depsolver:
             depsolver.run()
 
@@ -323,31 +327,36 @@ def test_run(pulp):
                     "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
                     "WARNING",
                     "Failed depsolving: lib.g can not be found in these input repos:"
-                    " ['test_repo_1', 'test_repo_2']. These rpms depend on it ['lib-x-100-200.x86_64.rpm']",
+                    " ['test_repo_1', 'test_repo_2']. These rpms depend on it - Rich deps: [],"
+                    " Unversioned deps: ['lib-x-100-200.x86_64.rpm']",
                 ),
                 (
                     "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
                     "INFO",
-                    "Failed depsolving: lib_exclude is blacklisted. These rpms depend on it"
-                    " ['lib-x-100-200.x86_64.rpm', 'lib-y-100-200.x86_64.rpm']",
+                    "Failed depsolving: lib_exclude is blacklisted. These rpms depend on it - "
+                    "Rich deps: [], Unversioned deps: ['lib-x-100-200.x86_64.rpm', "
+                    "'lib-y-100-200.x86_64.rpm']",
                 ),
                 (
                     "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
                     "INFO",
                     "Failed depsolving: blacklisted-package is blacklisted."
-                    " These rpms depend on it ['lib-y-100-200.x86_64.rpm']",
+                    " These rpms depend on it - Rich deps: [], Unversioned deps:"
+                    " ['lib-y-100-200.x86_64.rpm']",
                 ),
                 (
                     "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
                     "WARNING",
                     "Failed depsolving: pkgX(abc) can not be found in these input repos:"
-                    " ['test_repo_1', 'test_repo_2']. These rpms depend on it ['lib-x-100-200.x86_64.rpm']",
+                    " ['test_repo_1', 'test_repo_2']. These rpms depend on it - Rich deps:"
+                    " ['lib-x-100-200.x86_64.rpm'], Unversioned deps: []",
                 ),
                 (
                     "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
                     "WARNING",
                     "Failed depsolving: capY(xyz) can not be found in these input repos:"
-                    " ['test_repo_1', 'test_repo_2']. These rpms depend on it ['lib-x-100-200.x86_64.rpm']",
+                    " ['test_repo_1', 'test_repo_2']. These rpms depend on it - Rich deps:"
+                    " ['lib-x-100-200.x86_64.rpm'], Unversioned deps: []",
                 ),
                 order_matters=False,
             )
@@ -389,6 +398,7 @@ def _prepare_test_data(pulp):
         provides=[RpmDependency(name="gcc"), RpmDependency(name="lib.a")],
         requires=[RpmDependency(name="lib.b"), RpmDependency(name="lib.c")],
         sourcerpm="gcc.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_2 = RpmUnit(
@@ -403,6 +413,7 @@ def _prepare_test_data(pulp):
             RpmDependency(name="lib.d"),
             RpmDependency(name="/some/script"),
         ],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_3 = RpmUnit(
@@ -413,6 +424,7 @@ def _prepare_test_data(pulp):
         arch="x86_64",
         provides=[RpmDependency(name="apr")],
         requires=[RpmDependency(name="lib.a"), RpmDependency(name="lib.d")],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_4 = RpmUnit(
@@ -424,6 +436,7 @@ def _prepare_test_data(pulp):
         provides=[RpmDependency(name="babel"), RpmDependency(name="lib.b")],
         requires=[RpmDependency(name="lib.a"), RpmDependency(name="lib.b")],
         files=["/some/file", "/another/file", "/yet/another/file"],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_5 = RpmUnit(
@@ -440,6 +453,7 @@ def _prepare_test_data(pulp):
             RpmDependency(name="( pkgX(abc) with capY(xyz) )"),
             RpmDependency(name="lib_exclude"),
         ],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_6 = RpmUnit(
@@ -455,6 +469,7 @@ def _prepare_test_data(pulp):
         ],
         sourcerpm="lib-y.src.rpm",
         filename="lib-y-100-200.x86_64.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_7 = RpmUnit(
@@ -465,6 +480,7 @@ def _prepare_test_data(pulp):
         arch="x86_64",
         provides=[],
         requires=[],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_8 = RpmUnit(
@@ -475,6 +491,7 @@ def _prepare_test_data(pulp):
         arch="x86_64",
         provides=[],
         requires=[],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     # unit_11a/b are modular units, both of them has to be added to the output set
@@ -513,6 +530,7 @@ def _prepare_test_data(pulp):
         arch="x86_64",
         provides=[],
         requires=[],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_12 = RpmUnit(
@@ -523,6 +541,7 @@ def _prepare_test_data(pulp):
         arch="x86_64",
         provides=[RpmDependency(name="lib.z")],
         requires=[],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_13 = RpmUnit(
@@ -533,6 +552,7 @@ def _prepare_test_data(pulp):
         arch="x86_64",
         provides=[],
         requires=[],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_14 = RpmUnit(
@@ -544,6 +564,7 @@ def _prepare_test_data(pulp):
         provides=[],
         requires=[],
         files=["/some/script", "/another/script"],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     md_unit_1 = ModulemdUnit(
@@ -598,7 +619,7 @@ def test_export():
     Tests that exported units from depsolver includes identical rpms, if they come
     from different repos.
     """
-    depsolver = Depsolver(None, None, None)
+    depsolver = Depsolver(None, None, None, None)
 
     rpm = RpmUnit(
         name="test",
@@ -631,6 +652,100 @@ def test_export():
     assert rpms[0]._unit is rpm
 
 
+def test_run_missing_versioned_dependency(pulp):
+    repos, expected_output = _prepare_test_data_missing_versioned_dependency(pulp)
+
+    whitelist = set(["glibc"])
+    blacklist = [PackageToExclude("blacklisted-", globbing=True)]
+    dep_item = DepsolverItem(
+        whitelist=whitelist,
+        blacklist=blacklist,
+        in_pulp_repos=repos,
+    )
+
+    time_threshold = datetime.datetime(2026, 6, 30, 21, 18, 31)
+
+    with LogCapture() as mock_log:
+        with Depsolver([dep_item], [], set(), time_threshold) as depsolver:
+            depsolver.run()
+
+            assert depsolver._provided_rpms == {
+                RpmDependency(name="glibc", version="10", release="200", flags="EQ")
+            }
+            assert depsolver._required_rpms == {
+                RpmDependency(
+                    name="glibc-common", version="10", release="200", flags="EQ"
+                ),
+                RpmDependency(
+                    name="blacklisted-libs", version="10", release="200", flags="EQ"
+                ),
+            }
+
+            # checking correct rpm names and its associate source repo id
+            output = [
+                (item.name, item.associate_source_repo_id)
+                for item in depsolver.output_set
+            ]
+            assert sorted(output) == expected_output
+
+            mock_log.check_present(
+                (
+                    "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
+                    "WARNING",
+                    "Failed depsolving: versioned dependency glibc-common-10-200 (epoch: None) "
+                    "can not be found in these input repos: ['test_repo_rpm']. These rpms depend "
+                    "on it: ['glibc-10-200.x86_64.rpm']",
+                ),
+                (
+                    "ubi_manifest.worker.tasks.depsolver.rpm_depsolver",
+                    "INFO",
+                    "Failed depsolving: versioned dependency blacklisted-libs-10-200 (epoch: None) "
+                    "is blacklisted. These rpms depend on it: ['glibc-10-200.x86_64.rpm']",
+                ),
+                order_matters=False,
+            )
+
+
+def _prepare_test_data_missing_versioned_dependency(pulp):
+    dist_rpm = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="test_repo_rpm",
+        relative_url="/location/repo/os",
+    )
+
+    repo_rpm = create_and_insert_repo(
+        id=dist_rpm.repo_id,
+        pulp=pulp,
+        relative_url=dist_rpm.relative_url,
+        distributors=[dist_rpm],
+    )
+
+    unit_1 = RpmUnit(
+        name="glibc",
+        version="10",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        filename="glibc-10-200.x86_64.rpm",
+        provides=[RpmDependency(name="glibc", version="10", release="200", flags="EQ")],
+        requires=[
+            RpmDependency(name="glibc-common", version="10", release="200", flags="EQ"),
+            RpmDependency(
+                name="blacklisted-libs", version="10", release="200", flags="EQ"
+            ),
+        ],
+        sourcerpm="gcc.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
+    )
+
+    pulp.insert_units(repo_rpm, [unit_1])
+
+    expected_output_set = [(unit.name, "test_repo_rpm") for unit in [unit_1]]
+
+    return [repo_rpm], sorted(expected_output_set)
+
+
 def test_run_modular_deps(pulp):
     """test the main method of depsolver using scenario when a non-modular RPM can
     theoretically be resolved a modular RPM dependency, but we need to resolve a
@@ -657,7 +772,7 @@ def test_run_modular_deps(pulp):
 
     modular_filenames = set()
 
-    with Depsolver([dep_item], module_rpms, modular_filenames) as depsolver:
+    with Depsolver([dep_item], module_rpms, modular_filenames, None) as depsolver:
         depsolver.run()
         # check internal state of depsolver object
         # provides set holds all capabilities that we went through during depsolving
@@ -816,19 +931,20 @@ def test_run_with_skipped_depsolving(pulp):
     depsolving for RPMs is not run and only pkgs from config file are exported
     in output. Also guessing names of debug pkgs is skipped.
     """
-    rpm_rpm, expected_output_set = _prepare_test_data_skip_depsolving(pulp)
+    repo_rpm, expected_output_set = _prepare_test_data_skip_depsolving(pulp)
 
     whitelist = set(["gcc", "jq", "perl-version"])
     dep_item = DepsolverItem(
         whitelist=whitelist,
         blacklist=[],
-        in_pulp_repos=[rpm_rpm],
+        in_pulp_repos=[repo_rpm],
     )
 
     flags = {
         "base_pkgs_only": True,
     }
-    with Depsolver([dep_item], [], set(), **flags) as depsolver:
+    time_threshold = datetime.datetime(2026, 6, 30, 21, 18, 31)
+    with Depsolver([dep_item], [], set(), time_threshold, **flags) as depsolver:
         depsolver.run()
         # check internal state of depsolver object
         # with provided flag base_pkgs_only:True we don't store any of provides|requires
@@ -874,6 +990,7 @@ def _prepare_test_data_skip_depsolving(pulp):
             RpmDependency(name="lib.c"),
         ],
         sourcerpm="gcc.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_2 = RpmUnit(
@@ -888,6 +1005,7 @@ def _prepare_test_data_skip_depsolving(pulp):
             RpmDependency(name="lib.b"),
         ],
         sourcerpm="dep-gcc.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     pulp.insert_units(repo_rpm, [unit_1, unit_2])
@@ -921,7 +1039,7 @@ def test_log_missing_base_pkgs(pulp):
             in_pulp_repos=[repo_rpm],
         )
 
-        with Depsolver([dep_item], [], set()) as depsolver:
+        with Depsolver([dep_item], [], set(), None) as depsolver:
             depsolver.run()
             # logger should warn when the pkgs from whitelist weren't found
             mock_log.check_present(

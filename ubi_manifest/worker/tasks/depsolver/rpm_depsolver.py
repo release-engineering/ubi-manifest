@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from datetime import datetime
 from itertools import chain
 from typing import Any
 
@@ -42,6 +43,7 @@ class Depsolver:
         repos: list[DepsolverItem],
         modulemd_dependencies: set[str],
         modular_rpm_filenames: set[str],
+        time_threshold: datetime,
         **kwargs: Any,
     ) -> None:
         self.repos: list[DepsolverItem] = repos
@@ -73,6 +75,7 @@ class Depsolver:
             max_workers=MAX_WORKERS
         )
         self._base_pkgs_only = kwargs.get("base_pkgs_only") or False
+        self._time_threshold = time_threshold
 
     def __enter__(self) -> Depsolver:
         return self
@@ -96,7 +99,10 @@ class Depsolver:
         )
 
         newest_rpms = get_n_latest_from_content(
-            content, blacklist, self._modular_rpm_filenames  # type: ignore [arg-type]
+            content,  # type: ignore [arg-type]
+            blacklist,
+            self._modular_rpm_filenames,
+            self._time_threshold,
         )
 
         return newest_rpms
@@ -175,7 +181,7 @@ class Depsolver:
             self._executor.submit(search_rpms, crit, repos, BATCH_SIZE_RPM)
         )
         return get_n_latest_from_content(
-            content, blacklist, self._modular_rpm_filenames  # type: ignore [arg-type]
+            content, blacklist, self._modular_rpm_filenames, self._time_threshold  # type: ignore [arg-type]
         )
 
     def resolve_files(
@@ -199,6 +205,34 @@ class Depsolver:
         for _ in range(min(len(self._unsolved_rpms), BATCH_SIZE_RESOLVER)):
             batch.append(self._unsolved_rpms.pop())
         return self.what_provides(batch, "provides.name", repos, blacklist)
+
+    def get_missing_deps(self) -> tuple[set[RpmDependency], set[str]]:
+        """
+        Returns two sets of missing requirements:
+        1. versioned dependencies - whole RpmDependency objects
+        2. other dependencies - names of rich and unversioned dependencies
+        """
+        # create a map of provided RPMs by name for quicker lookup
+        providers_by_name: dict[str, list[RpmDependency]] = {}
+        for prov in self._provided_rpms:
+            providers_by_name.setdefault(prov.name, []).append(prov)
+
+        versioned_deps_missing = set()
+        other_deps_missing = set()
+
+        for req in self._required_rpms:
+            if not any(
+                is_requirement_resolved(req, prov)
+                for prov in providers_by_name.get(req.name, [])
+            ):
+                if req.flags:
+                    # add the whole RpmDependency object so we can extract the version later
+                    versioned_deps_missing.add(req)
+                else:
+                    # only name is needed for unversioned and rich dependencies
+                    other_deps_missing.add(req.name)
+
+        return versioned_deps_missing, other_deps_missing
 
     def run(self) -> None:
         """
@@ -271,15 +305,20 @@ class Depsolver:
             to_resolve = set(resolved)
 
         if not self._base_pkgs_only:
-            # log warnings if depsolving failed
-            deps_not_found = {req.name for req in self._required_rpms} - {
-                prov.name for prov in self._provided_rpms
-            }
-            deps_not_found |= {req.name for req in self._required_files} - {
+            versioned_deps_missing, other_deps_missing = self.get_missing_deps()
+            # add missing files to other_deps_missing
+            other_deps_missing |= {req.name for req in self._required_files} - {
                 prov.name for prov in self._provided_files
             }
-            if deps_not_found:
-                self._log_warnings(deps_not_found, pulp_repos, merged_blacklist)
+
+            # log warnings if depsolving failed
+            if versioned_deps_missing or other_deps_missing:
+                self._log_warnings(
+                    versioned_deps_missing,
+                    other_deps_missing,
+                    pulp_repos,
+                    merged_blacklist,
+                )
 
     def export(self) -> dict[str, list[UbiUnit]]:
         """
@@ -304,7 +343,8 @@ class Depsolver:
 
     def _log_warnings(
         self,
-        deps_not_found: set[str],
+        versioned_deps_missing: set[RpmDependency],
+        other_deps_missing: set[str],
         pulp_repos: list[YumRepository],
         merged_blacklist: list[PackageToExclude],
     ) -> None:
@@ -314,44 +354,73 @@ class Depsolver:
         """
         input_repos = [x.id for x in pulp_repos]
 
-        # To determine if dep is missing due to being blacklisted
-        def _is_blacklisted_by_rule(item: str, rule: PackageToExclude) -> bool:
-            if rule.globbing:
-                return item.startswith(rule.name)
-            return item == rule.name
+        # Pre-compute requires by filename for all output RPMs to avoid re-scanning per missing dep
+        requires_names_map = {
+            rpm.filename: self._get_requires_names(rpm.requires)
+            for rpm in self.output_set
+        }
 
-        def _requires_names(requires: list[RpmDependency]) -> set[str]:
-            out = set()
-            for item in requires:
-                if item.name.startswith("("):
-                    out |= {dep.name for dep in parse_bool_deps(item.name)}
-                else:
-                    out.add(item.name)
-            return out
-
-        # Get rpms depending on missing dependencies
-        for item in deps_not_found:
+        for item in versioned_deps_missing:
             depending_rpms = list(
-                rpm.filename
-                for rpm in self.output_set
-                if item in _requires_names(rpm.requires)
+                filename
+                for filename, requires_names in requires_names_map.items()
+                if item in requires_names["versioned_deps"]
             )
-
-            # Divide missing dependencies blacklisted and all others
-            if any((_is_blacklisted_by_rule(item, rule) for rule in merged_blacklist)):
-                # This is expected, so logging is only at the info level
+            # Divide missing dependencies into blacklisted and all others
+            if any(
+                self._is_blacklisted_by_rule(item.name, rule)
+                for rule in merged_blacklist
+            ):
                 _LOG.info(
-                    "Failed depsolving: %s is blacklisted. These rpms depend on it %s",
-                    item,
+                    "Failed depsolving: versioned dependency %s-%s-%s (epoch: %s) is blacklisted. "
+                    "These rpms depend on it: %s",
+                    item.name,
+                    item.version,
+                    item.release,
+                    item.epoch,
                     sorted(depending_rpms),
                 )
             else:
                 _LOG.warning(
-                    "Failed depsolving: %s can not be found in these input repos: %s. "
-                    "These rpms depend on it %s",
-                    item,
+                    "Failed depsolving: versioned dependency %s-%s-%s (epoch: %s) "
+                    "can not be found in these input repos: %s. These rpms depend on it: %s",
+                    item.name,
+                    item.version,
+                    item.release,
+                    item.epoch,
                     input_repos,
                     sorted(depending_rpms),
+                )
+
+        for item in other_deps_missing:
+            # Divide the depending rpms into rich and unversioned dependencies
+            depending_rich_deps = set()
+            depending_unversioned_deps = set()
+            for filename, requires_names in requires_names_map.items():
+                if item in requires_names["rich_deps"]:
+                    depending_rich_deps.add(filename)
+                if item in requires_names["unversioned_deps"]:
+                    depending_unversioned_deps.add(filename)
+
+            # Divide missing dependencies into blacklisted and all others
+            if any(
+                self._is_blacklisted_by_rule(item, rule) for rule in merged_blacklist
+            ):
+                # This is expected, so logging is only at the info level
+                _LOG.info(
+                    "Failed depsolving: %s is blacklisted. These rpms depend on it - Rich deps: %s, Unversioned deps: %s",
+                    item,
+                    sorted(depending_rich_deps),
+                    sorted(depending_unversioned_deps),
+                )
+            else:
+                _LOG.warning(
+                    "Failed depsolving: %s can not be found in these input repos: %s. "
+                    "These rpms depend on it - Rich deps: %s, Unversioned deps: %s",
+                    item,
+                    input_repos,
+                    sorted(depending_rich_deps),
+                    sorted(depending_unversioned_deps),
                 )
 
     def _log_missing_base_pkgs(self) -> None:
@@ -363,3 +432,38 @@ class Depsolver:
                 repos = [repo.id for repo in item.in_pulp_repos]
                 for pkg_name in missing:
                     _LOG.warning("'%s' not found in %s.", pkg_name, repos)
+
+    @staticmethod
+    def _is_blacklisted_by_rule(item: str, rule: PackageToExclude) -> bool:
+        """
+        Check if an item is blacklisted.
+        """
+        if rule.globbing:
+            return item.startswith(rule.name)
+        return item == rule.name
+
+    @staticmethod
+    def _get_requires_names(
+        requires: list[RpmDependency],
+    ) -> dict[str, set[str | RpmDependency]]:
+        """
+        Returns requires categorized into versioned deps, rich deps, and unversioned deps.
+        """
+        versioned_deps = set()
+        rich_deps = set()
+        unversioned_deps = set()
+        for item in requires:
+            if item.flags:
+                # add the whole RpmDependency object for versioned deps
+                versioned_deps.add(item)
+            elif item.name.startswith("("):
+                rich_deps |= {dep.name for dep in parse_bool_deps(item.name)}
+            else:
+                unversioned_deps.add(item.name)
+
+        out = {
+            "versioned_deps": versioned_deps,
+            "unversioned_deps": unversioned_deps,
+            "rich_deps": rich_deps,
+        }
+        return out

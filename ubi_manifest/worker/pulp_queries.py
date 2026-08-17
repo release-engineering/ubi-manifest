@@ -26,6 +26,7 @@ RPM_FIELDS = [
     "provides",
     "files",
     "filelist",
+    "cdn_published",
 ]
 MODULEMD_FIELDS = [
     "name",

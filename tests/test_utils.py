@@ -1,3 +1,4 @@
+import datetime
 from unittest import mock
 
 import pytest
@@ -313,7 +314,17 @@ def test_flatten_list_of_sets():
 
 
 def test_get_n_latest_from_content():
-    """test function that takes rpms and returns onyl the latest version of them"""
+    """test function that takes rpms and returns only the latest version of them"""
+    # unit_0 doesn't have the cdn_publish attribute set, meaning it was not
+    # yet published, so we do not want to include it.
+    unit_0 = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="test",
+        version="201",
+        release="20",
+        arch="x86_64",
+    )
     unit_1 = get_ubi_unit(
         RpmUnit,
         "test_repo_id",
@@ -321,6 +332,7 @@ def test_get_n_latest_from_content():
         version="200",
         release="20",
         arch="x86_64",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
     unit_2 = get_ubi_unit(
         RpmUnit,
@@ -329,6 +341,7 @@ def test_get_n_latest_from_content():
         version="10",
         release="20",
         arch="x86_64",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
     unit_3 = get_ubi_unit(
         RpmUnit,
@@ -337,6 +350,7 @@ def test_get_n_latest_from_content():
         version="100",
         release="20",
         arch="x86_64",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
     unit_4 = get_ubi_unit(
         RpmUnit,
@@ -345,6 +359,7 @@ def test_get_n_latest_from_content():
         version="10",
         release="20",
         arch="x86_64",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
     unit_5 = get_ubi_unit(
         RpmUnit,
@@ -353,18 +368,20 @@ def test_get_n_latest_from_content():
         version="10",
         release="20",
         arch="x86_64",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
-    units = [unit_1, unit_2, unit_3, unit_4, unit_5]
+    units = [unit_0, unit_1, unit_2, unit_3, unit_4, unit_5]
     blacklist = [PackageToExclude("pkg_exclude", True, "x86_64")]
+    time_threshold = datetime.datetime(2026, 6, 30, 21, 18, 31)
 
-    result = get_n_latest_from_content(units, blacklist)
+    result = get_n_latest_from_content(units, blacklist, time_threshold=time_threshold)
     result.sort(key=lambda x: x.name)
 
     # there should be only 2 units in the result
     assert len(result) == 2
 
-    # units in the results have the highest version
+    # units in the results have the highest version and are published
     unit = result[0]
     assert unit.name == "foo"
     assert unit.version == "100"
@@ -460,6 +477,8 @@ def test_get_n_latest_from_content_skip_modular_rpms():
             "(    ((( pkgA(xxx) >= 0.1.2 with capA    )))     )",
             {"pkgA(xxx)", "capA"},
         ),
+        # case with package name starting with an operator
+        ("(rpmA if android)", {"rpmA", "android"}),
     ],
 )
 def test_parse_bool_deps(clause, result):
@@ -765,6 +784,12 @@ def test_get_criteria_for_modules():
             RpmDependency(
                 name="test-dep", version="11", release="el10", epoch="0", flags="LT"
             ),
+            RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
+            True,
+        ),
+        # flag EQ - equal, but no release in requirement
+        (
+            RpmDependency(name="test-dep", version="10", flags="EQ"),
             RpmDependency(name="test-dep", version="10", release="el10", epoch="0"),
             True,
         ),

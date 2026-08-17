@@ -1,3 +1,4 @@
+import datetime
 import json
 from functools import partial
 from unittest import mock
@@ -114,6 +115,7 @@ def test_depsolve_task(pulp):
         filename="gcc-10.200.x86_64.rpm",
         requires=[],
         provides=[],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_debuginfo = RpmUnit(
@@ -126,6 +128,7 @@ def test_depsolve_task(pulp):
         provides=[],
         filename="gcc-debuginfo-10.200.x86_64.rpm",
         sourcerpm="gcc_src-1-0.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
     unit_debugsource = RpmUnit(
         name="gcc_src-debugsource",
@@ -137,6 +140,7 @@ def test_depsolve_task(pulp):
         provides=[],
         filename="gcc_src-debugsource-10.200.x86_64.rpm",
         sourcerpm="gcc_src_debug-1-0.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
     unit_srpm = RpmUnit(
         name="gcc_src",
@@ -580,6 +584,7 @@ def _setup_data_multiple_population_sources(pulp):
         filename="gcc-10.200.x86_64.rpm",
         requires=[],
         provides=[],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_2 = RpmUnit(
@@ -592,6 +597,7 @@ def _setup_data_multiple_population_sources(pulp):
         provides=[],
         filename="gcc-11.200.x86_64.rpm",
         sourcerpm="gcc_src-2-0.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_3 = RpmUnit(
@@ -604,6 +610,7 @@ def _setup_data_multiple_population_sources(pulp):
         filename="bind-10.200.x86_64.rpm",
         requires=[],
         provides=[],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_4 = RpmUnit(
@@ -616,6 +623,7 @@ def _setup_data_multiple_population_sources(pulp):
         provides=[],
         filename="bind-11.200.x86_64.rpm",
         sourcerpm="bind_src-2-0.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_debuginfo_1 = RpmUnit(
@@ -628,6 +636,7 @@ def _setup_data_multiple_population_sources(pulp):
         provides=[],
         filename="gcc-debuginfo-10.200.x86_64.rpm",
         sourcerpm="gcc_src-1-0.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
     unit_debuginfo_2 = RpmUnit(
         name="gcc-debuginfo",
@@ -639,6 +648,7 @@ def _setup_data_multiple_population_sources(pulp):
         provides=[],
         filename="gcc-debuginfo-11.200.x86_64.rpm",
         sourcerpm="gcc_src-1-0.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
     unit_debugsource_1 = RpmUnit(
         name="gcc_src-debugsource",
@@ -650,6 +660,7 @@ def _setup_data_multiple_population_sources(pulp):
         provides=[],
         filename="gcc_src-debugsource-11.200.x86_64.rpm",
         sourcerpm="gcc_src_debug-1-0.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
     unit_debugsource_2 = RpmUnit(
         name="gcc_src-debugsource",
@@ -661,6 +672,7 @@ def _setup_data_multiple_population_sources(pulp):
         provides=[],
         filename="gcc_src-debugsource-10.200.x86_64.rpm",
         sourcerpm="gcc_src_debug-1-0.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_debuginfo_3 = RpmUnit(
@@ -673,6 +685,7 @@ def _setup_data_multiple_population_sources(pulp):
         provides=[],
         filename="bind-debuginfo-10.200.x86_64.rpm",
         sourcerpm="bind_src-2-0.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
     unit_debuginfo_4 = RpmUnit(
         name="bind-debuginfo",
@@ -684,6 +697,7 @@ def _setup_data_multiple_population_sources(pulp):
         provides=[],
         filename="bind-debuginfo-11.200.x86_64.rpm",
         sourcerpm="bind_src-1-0.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
     unit_debugsource_3 = RpmUnit(
         name="bind_src-debugsource",
@@ -695,6 +709,7 @@ def _setup_data_multiple_population_sources(pulp):
         provides=[],
         filename="bind_src-debugsource-11.200.x86_64.rpm",
         sourcerpm="bind_src_debug-2-0.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
     unit_debugsource_4 = RpmUnit(
         name="bind_src-debugsource",
@@ -706,6 +721,7 @@ def _setup_data_multiple_population_sources(pulp):
         provides=[],
         filename="bind_src-debugsource-10.200.x86_64.rpm",
         sourcerpm="bind_src_debug-1-0.src.rpm",
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
     )
 
     unit_srpm = RpmUnit(
