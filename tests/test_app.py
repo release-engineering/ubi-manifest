@@ -4,6 +4,9 @@ from unittest import mock
 
 import pytest
 from attr import define
+from celery.backends.redis import RedisBackend
+
+from ubi_manifest.worker.tasks.celery import app as celery_app
 
 from .utils import MockedRedis, create_and_insert_repo, create_mock_configs
 
@@ -12,6 +15,38 @@ from .utils import MockedRedis, create_and_insert_repo, create_mock_configs
 class MockAsyncResult:
     task_id: str
     state: str
+    backend: object = None
+
+
+@pytest.fixture(name="task_backend")
+def mocked_task_backend():
+    """Mock celery's result backend client with MockedRedis."""
+    with mock.patch.object(RedisBackend, "client", MockedRedis(data={})):
+        yield celery_app.backend
+
+
+def store_task_result(backend, task_id, state):
+    """
+    Stores a result of the given task the way a worker would.
+    """
+    backend.client.data[backend.get_key_for_task(task_id)] = backend.encode(
+        {"status": state, "result": None, "task_id": task_id}
+    )
+
+
+def publish_task(backend):
+    """
+    Creates an apply_async replacement that returns a result for the task_id
+    it's called with.
+    """
+
+    def apply_async(args, task_id):
+        assert backend.get(
+            backend.get_key_for_task(task_id)
+        ), f"pending state of {task_id} was not stored before publishing"
+        return MockAsyncResult(task_id=task_id, state="PENDING", backend=backend)
+
+    return apply_async
 
 
 @pytest.mark.parametrize(
@@ -172,38 +207,39 @@ def test_status_errors(
     }
 
 
-def test_task_state(client, auth_header):
+@pytest.mark.parametrize("state", ["PENDING", "SUCCESS"])
+def test_task_state(client, auth_header, task_backend, state):
     """test getting state of given celery task_id"""
-    with mock.patch("ubi_manifest.app.api.app.AsyncResult") as task_mock:
-        task_id = "some-task-id"
-        task_mock.return_value = MockAsyncResult(task_id=task_id, state="PENDING")
+    task_id = "some-task-id"
+    store_task_result(task_backend, task_id, state)
 
-        response = client.get(
-            f"/api/v1/task/{task_id}", headers=auth_header(roles=["reader"])
-        )
+    response = client.get(
+        f"/api/v1/task/{task_id}", headers=auth_header(roles=["reader"])
+    )
 
-        # 200 status code is expected
-        assert response.status_code == 200
-        json_data = response.json()
-        # task_id and state are properly set in response
-        assert json_data["task_id"] == task_id
-        assert json_data["state"] == "PENDING"
+    # 200 status code is expected
+    assert response.status_code == 200
+    json_data = response.json()
+    # task_id and state are properly set in response
+    assert json_data["task_id"] == task_id
+    assert json_data["state"] == state
 
 
-def test_task_state_not_found(client, auth_header):
+def test_task_state_not_found(client, auth_header, task_backend):
     """test getting state of given celery task when task is not found"""
-    with mock.patch("ubi_manifest.app.api.app.AsyncResult") as task_mock:
-        task_id = "some-task-id"
-        task_mock.return_value = None
+    task_id = "some-task-id"
+    # celery reports PENDING for unknown task_ids, a stored result makes it known
+    store_task_result(task_backend, "some-other-task-id", "SUCCESS")
+    assert celery_app.AsyncResult(task_id).state == "PENDING"
 
-        response = client.get(
-            f"/api/v1/task/{task_id}", headers=auth_header(roles=["reader"])
-        )
-        # 404 is expected status code
-        assert response.status_code == 404
-        json_data = response.json()
-        # proper detail is set in the response
-        assert json_data["detail"] == f"Task {task_id} not found"
+    response = client.get(
+        f"/api/v1/task/{task_id}", headers=auth_header(roles=["reader"])
+    )
+    # 404 is expected status code
+    assert response.status_code == 404
+    json_data = response.json()
+    # proper detail is set in the response
+    assert json_data["detail"] == f"Task {task_id} not found"
 
 
 def test_manifest_get(client, auth_header):
@@ -307,12 +343,10 @@ def test_manifest_post_full_dep(
     client,
     pulp,
     auth_header,
+    task_backend,
 ):
     """test request for depsolving for given repo ids where we use full depsolving"""
-    mocked_apply_async.side_effect = [
-        MockAsyncResult(task_id="foo-bar-id-1", state="PENDING"),
-        MockAsyncResult(task_id="foo-bar-id-2", state="PENDING"),
-    ]
+    mocked_apply_async.side_effect = publish_task(task_backend)
     get_content_configs.return_value = [
         {"source": "url_or_dir_1", "branch_prefix": "foo"},
         {"source": "url_or_dir_2", "branch_prefix": "bar"},
@@ -362,8 +396,11 @@ def test_manifest_post_full_dep(
     # present in 'ubi_repo_2'.
     mocked_apply_async.assert_has_calls(
         [
-            mock.call(args=[["ubi_repo_1", "ubi_repo_2"], "url_or_dir_1", "foo"]),
-            mock.call(args=[["ubi_repo_3"], "url_or_dir_1", "foo"]),
+            mock.call(
+                args=[["ubi_repo_1", "ubi_repo_2"], "url_or_dir_1", "foo"],
+                task_id=mock.ANY,
+            ),
+            mock.call(args=[["ubi_repo_3"], "url_or_dir_1", "foo"], task_id=mock.ANY),
         ]
     )
     # expected status code is 201
@@ -371,10 +408,17 @@ def test_manifest_post_full_dep(
     json_data = response.json()
     # two tasks are expected to be spawned
     assert len(json_data) == 2
-    assert json_data[0]["task_id"] == "foo-bar-id-1"
-    assert json_data[0]["state"] == "PENDING"
-    assert json_data[1]["task_id"] == "foo-bar-id-2"
-    assert json_data[1]["state"] == "PENDING"
+    published_ids = [call.kwargs["task_id"] for call in mocked_apply_async.mock_calls]
+    assert [item["task_id"] for item in json_data] == published_ids
+    assert [item["state"] for item in json_data] == ["PENDING", "PENDING"]
+
+    # spawned tasks are queryable before a worker picks them up
+    for task_id in published_ids:
+        task_response = client.get(
+            f"/api/v1/task/{task_id}", headers=auth_header(roles=["reader"])
+        )
+        assert task_response.status_code == 200
+        assert task_response.json() == {"task_id": task_id, "state": "PENDING"}
 
 
 @mock.patch("ubi_manifest.app.utils.get_content_configs")
@@ -389,12 +433,10 @@ def test_manifest_post_not_full_dep(
     client,
     pulp,
     auth_header,
+    task_backend,
 ):
     """test request for depsolving for given repo ids where we do not use full depsolving"""
-    mocked_apply_async.side_effect = [
-        MockAsyncResult(task_id="foo-bar-id-1", state="PENDING"),
-        MockAsyncResult(task_id="foo-bar-id-2", state="PENDING"),
-    ]
+    mocked_apply_async.side_effect = publish_task(task_backend)
     get_content_configs.return_value = [
         {"source": "url_or_dir_1", "branch_prefix": "foo"},
         {"source": "url_or_dir_2", "branch_prefix": "bar"},
@@ -434,8 +476,12 @@ def test_manifest_post_not_full_dep(
     # determined and the depsolving is performed separately for each repo.
     mocked_apply_async.assert_has_calls(
         [
-            mock.call(args=[["client-tools_repo_1"], "url_or_dir_2", "bar"]),
-            mock.call(args=[["client-tools_repo_2"], "url_or_dir_2", "bar"]),
+            mock.call(
+                args=[["client-tools_repo_1"], "url_or_dir_2", "bar"], task_id=mock.ANY
+            ),
+            mock.call(
+                args=[["client-tools_repo_2"], "url_or_dir_2", "bar"], task_id=mock.ANY
+            ),
         ]
     )
     # expected status code is 201
@@ -443,10 +489,9 @@ def test_manifest_post_not_full_dep(
     json_data = response.json()
     # two tasks are expected to be spawned
     assert len(json_data) == 2
-    assert json_data[0]["task_id"] == "foo-bar-id-1"
-    assert json_data[0]["state"] == "PENDING"
-    assert json_data[1]["task_id"] == "foo-bar-id-2"
-    assert json_data[1]["state"] == "PENDING"
+    published_ids = [call.kwargs["task_id"] for call in mocked_apply_async.mock_calls]
+    assert [item["task_id"] for item in json_data] == published_ids
+    assert [item["state"] for item in json_data] == ["PENDING", "PENDING"]
 
 
 @mock.patch("ubi_manifest.app.utils.get_content_configs")
