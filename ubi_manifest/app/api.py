@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 
 import redis
 import requests
+from celery import states
+from celery.utils import uuid
 from fastapi import APIRouter, HTTPException
 
 from ubi_manifest import auth
@@ -183,8 +185,11 @@ def manifest_post(depsolve_item: DepsolveItem) -> list[TaskState]:
 
     tasks_states = []
     for item in depsolve_items:
+        task_id = uuid()
+        app.backend.store_result(task_id, None, states.PENDING)
         task = depsolve_task.apply_async(
-            args=[item["repo_group"], item["url"], item.get("branch_prefix", "")]
+            args=[item["repo_group"], item["url"], item.get("branch_prefix", "")],
+            task_id=task_id,
         )
         tasks_states.append(TaskState(task_id=task.task_id, state=task.state))
 
@@ -268,7 +273,7 @@ def manifest_get(repo_id: str) -> DepsolverResult:
 )
 def task_state(task_id: str) -> TaskState:
     task = app.AsyncResult(task_id)
-    if task:
+    if task.backend.get(task.backend.get_key_for_task(task_id)):
         return TaskState(task_id=task.task_id, state=task.state)
 
     raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
