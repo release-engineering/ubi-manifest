@@ -274,22 +274,33 @@ class Depsolver:
         ]
 
         # Get modulemd binary/debug rpm dependencies
+        modulemd_ft = None
         if self.modulemd_dependencies:
-            content_fts.append(
-                self._executor.submit(
-                    self.get_modulemd_packages,  # type: ignore [arg-type]
-                    pulp_repos,
-                    self.modulemd_dependencies,
-                )
+            modulemd_ft = self._executor.submit(
+                self.get_modulemd_packages,
+                pulp_repos,
+                self.modulemd_dependencies,
             )
 
-        # wait for base and binary/debug module packages
+        # wait for base packages
+        base_content = set()
         for content in as_completed(content_fts):
-            self.output_set.update(content.result())
+            base_content.update(content.result())
+
+        # Base packages are searched per input content set, so beta and mainline
+        # repos can each contribute a different version of the same package.
+        base_content = set(get_n_latest_from_content(base_content))
+        self.output_set.update(base_content)
+
+        # wait for binary/debug module packages
+        modulemd_content: set[UbiUnit] = set()
+        if modulemd_ft is not None:
+            modulemd_content.update(modulemd_ft.result())  # type: ignore [arg-type]
+            self.output_set.update(modulemd_content)
 
         self._log_missing_base_pkgs()
 
-        to_resolve = set(self.output_set)
+        to_resolve = base_content | modulemd_content
         while not self._base_pkgs_only:
             # extract provides and requires
             self.extract_and_resolve(to_resolve)
