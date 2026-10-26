@@ -925,6 +925,100 @@ def _prepare_test_data_modular_test(pulp):
     return repo, all_requires, all_provides, sorted(expected_output_set)
 
 
+def test_run_superseded_base_pkg_not_depsolved(pulp):
+    """
+    Beta and mainline input repos are expected to hold different versions of the
+    same package. Only the newest one is kept and depsolved - the outdated
+    dependency of the superseded one is neither pulled in nor reported as missing.
+    """
+    beta_repo = create_and_insert_repo(
+        id="beta_repo", pulp=pulp, relative_url="/location/beta/os"
+    )
+    mainline_repo = create_and_insert_repo(
+        id="mainline_repo", pulp=pulp, relative_url="/location/mainline/os"
+    )
+
+    new_dep = RpmDependency(
+        name="lib.a", version="2", release="200", epoch="1", flags="EQ"
+    )
+    old_dep = RpmDependency(
+        name="lib.a", version="1", release="200", epoch="1", flags="EQ"
+    )
+
+    gcc_new = RpmUnit(
+        name="gcc",
+        filename="gcc-2-200.x86_64.rpm",
+        version="2",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[RpmDependency(name="gcc")],
+        requires=[new_dep],
+    )
+    lib_new = RpmUnit(
+        name="lib",
+        filename="lib-2-200.x86_64.rpm",
+        version="2",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[new_dep],
+        requires=[],
+    )
+    gcc_old = RpmUnit(
+        name="gcc",
+        filename="gcc-1-200.x86_64.rpm",
+        version="1",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[RpmDependency(name="gcc")],
+        requires=[old_dep],
+    )
+    lib_old = RpmUnit(
+        name="lib",
+        filename="lib-1-200.x86_64.rpm",
+        version="1",
+        release="200",
+        epoch="1",
+        arch="x86_64",
+        provides=[old_dep],
+        requires=[],
+    )
+
+    pulp.insert_units(beta_repo, [gcc_new, lib_new])
+    pulp.insert_units(mainline_repo, [gcc_old, lib_old])
+
+    dep_items = [
+        DepsolverItem(whitelist={"gcc"}, blacklist=[], in_pulp_repos=[repo])
+        for repo in (beta_repo, mainline_repo)
+    ]
+
+    with LogCapture() as mock_log:
+        with Depsolver(dep_items, set(), set(), None) as depsolver:
+            depsolver.run()
+
+            # only the dependency of the newest gcc was requested
+            assert depsolver._required_rpms == {new_dep}
+
+            # the superseded gcc is dropped and only the newest lib is pulled in
+            output = [
+                (item.filename, item.associate_source_repo_id)
+                for item in depsolver.output_set
+            ]
+            assert sorted(output) == [
+                ("gcc-2-200.x86_64.rpm", "beta_repo"),
+                ("lib-2-200.x86_64.rpm", "beta_repo"),
+            ]
+
+            # the outdated dependency is not reported as missing
+            assert not [
+                record
+                for record in mock_log.records
+                if record.getMessage().startswith("Failed depsolving")
+            ]
+
+
 def test_run_with_skipped_depsolving(pulp):
     """
     Tests that while using 'base-pkgs-only: True' flag in ubi config file,
