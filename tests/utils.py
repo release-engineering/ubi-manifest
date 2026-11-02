@@ -1,7 +1,7 @@
 from unittest.mock import Mock
 
 import ubiconfig
-from attrs import define
+from attrs import Factory, define
 from pubtools.pulplib import RpmDependency, YumRepository
 
 
@@ -147,6 +147,50 @@ class MockedRedis:
         if key not in keys:
             return False
         return True
+
+    def setex(self, key: str, _expires, value: str) -> None:
+        self.data[key] = value
+
+    def publish(self, key: str, value: str) -> None:
+        """
+        Does nothing, there are no subscribers in tests. Published values are
+        read back from data directly.
+        """
+
+    def pipeline(self) -> "MockedRedisPipeline":
+        return MockedRedisPipeline(redis=self)
+
+
+@define
+class MockedRedisPipeline:
+    """
+    Collects commands and applies them to MockedRedis on execute(). Needed
+    because celery's redis result backend writes results through a pipeline.
+    """
+
+    redis: MockedRedis
+    commands: list = Factory(list)
+
+    def __enter__(self) -> "MockedRedisPipeline":
+        return self
+
+    def __exit__(self, *_args) -> None:
+        pass
+
+    def __getattr__(self, name: str):
+        def command(*args, **kwargs):
+            self.commands.append((name, args, kwargs))
+            return self
+
+        return command
+
+    def execute(self) -> list:
+        results = [
+            getattr(self.redis, name)(*args, **kwargs)
+            for name, args, kwargs in self.commands
+        ]
+        self.commands.clear()
+        return results
 
 
 def rpmdeps_from_names(*names):
