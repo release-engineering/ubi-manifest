@@ -20,6 +20,7 @@ BATCH_SIZE = int(os.getenv("UBI_MANIFEST_BATCH_SIZE", "250"))
 
 RPM_FIELDS = [
     "name",
+    "epoch",
     "filename",
     "sourcerpm",
     "requires",

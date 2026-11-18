@@ -294,7 +294,7 @@ def test_pipeline(get_content_configs, pulp, caplog):
             expected_ubi_binary_repo_1 = [
                 f"Processing and auditing UBI repo '{ubi_binary_repo_1.id}' with modular content...",
                 "Only auditing of non modular content has been implemented.",
-                f"[{ubi_binary_repo_1.id}] UBI rpm of {ubi_binary_repo_1.arch} 'gcc' is outdated (current: ('0', '8.2.1', '200'), latest: ('0', '9.0.1', '200'))",
+                f"[{ubi_binary_repo_1.id}] UBI rpm of {ubi_binary_repo_1.arch} 'gcc' is outdated (current: ('1', '8.2.1', '200'), latest: ('1', '9.0.1', '200'))",
                 f"[{ubi_binary_repo_1.id}] Whitelisted package 'neovim' found in out repo but not in any input repos!",
                 f"[{ubi_binary_repo_1.id}] Whitelisted package 'bash' found in input repos but not in output repo!",
                 "SRPM 'bind_src-1-0.src.rpm' for RPM 'bind' is missing in the source repository",
