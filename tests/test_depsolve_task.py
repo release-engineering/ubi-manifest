@@ -372,6 +372,132 @@ def test_depsolve_task_empty_manifests(pulp):
                     assert len(content) == 0
 
 
+def test_depsolve_task_epoch_decides_latest(pulp):
+    """
+    Simulate run of depsolve task where two builds of a base package share a
+    version and the lower epoch carries the higher release. The higher epoch
+    wins, so epoch has to be queried from Pulp and taken into account.
+    """
+    ubi_repo = create_and_insert_repo(
+        id="ubi_repo",
+        pulp=pulp,
+        population_sources=["rhel_repo"],
+        relative_url="foo/bar/os",
+        ubi_config_version="8.4",
+        content_set="cs_rpm_out",
+    )
+    distributor_rhel = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="rhel_repo",
+        relative_url="foo/rhel/os",
+    )
+    rhel_repo = create_and_insert_repo(
+        id="rhel_repo",
+        pulp=pulp,
+        content_set="cs_rpm_in",
+        relative_url="foo/rhel/os",
+        distributors=[distributor_rhel],
+    )
+
+    distributor_debug = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="ubi_debug_repo",
+        relative_url="foo/bar/debug",
+    )
+    ubi_debug_repo = create_and_insert_repo(
+        id="ubi_debug_repo",
+        pulp=pulp,
+        population_sources=["rhel_debug_repo"],
+        relative_url="foo/bar/debug",
+        distributors=[distributor_debug],
+        content_set="cs_debug_out",
+    )
+    distributor_rhel_debug = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="rhel_debug_repo",
+        relative_url="foo/rhel/debug",
+    )
+    rhel_debug_repo = create_and_insert_repo(
+        id="rhel_debug_repo",
+        pulp=pulp,
+        content_set="cs_debug_in",
+        relative_url="foo/rhel/debug",
+        distributors=[distributor_rhel_debug],
+    )
+
+    distributor_source = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="ubi_source_repo",
+        relative_url="foo/bar/source/SRPMS",
+    )
+    ubi_source_repo = create_and_insert_repo(
+        id="ubi_source_repo",
+        pulp=pulp,
+        population_sources=["rhel_source_repo"],
+        relative_url="foo/bar/source/SRPMS",
+        distributors=[distributor_source],
+        content_set="cs_srpm_out",
+    )
+    distributor_rhel_source = Distributor(
+        id="yum_distributor",
+        type_id="yum_distributor",
+        repo_id="rhel_source_repo",
+        relative_url="foo/rhel/source/SRPMS",
+    )
+    rhel_source_repo = create_and_insert_repo(
+        id="rhel_source_repo",
+        pulp=pulp,
+        content_set="cs_srpm_in",
+        relative_url="foo/rhel/source/SRPMS",
+        distributors=[distributor_rhel_source],
+    )
+
+    unit_higher_epoch = RpmUnit(
+        name="gcc",
+        version="1.17.1",
+        release="1.el9",
+        epoch="3",
+        arch="x86_64",
+        filename="gcc-1.17.1-1.el9.x86_64.rpm",
+        requires=[],
+        provides=[],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
+    )
+    unit_lower_epoch = RpmUnit(
+        name="gcc",
+        version="1.17.1",
+        release="1.el9_8",
+        epoch="2",
+        arch="x86_64",
+        filename="gcc-1.17.1-1.el9_8.x86_64.rpm",
+        requires=[],
+        provides=[],
+        cdn_published=datetime.datetime(2026, 6, 29, 21, 18, 31),
+    )
+
+    pulp.insert_units(rhel_repo, [unit_higher_epoch, unit_lower_epoch])
+
+    with mock.patch("ubi_manifest.worker.utils.Client") as client:
+        with mock.patch("ubiconfig.get_loader", return_value=MockLoader()):
+            with mock.patch(
+                "ubi_manifest.worker.tasks.depsolve.redis.from_url"
+            ) as mock_redis_from_url:
+                redis = MockedRedis(data={})
+                mock_redis_from_url.return_value = redis
+
+                client.return_value = pulp.client
+                depsolve.depsolve_task(["ubi_repo"], "fake-url")
+
+                content = json.loads(redis.get("ubi_repo"))
+                # only the highest epoch is kept, despite its lower release
+                assert len(content) == 1
+                assert content[0]["value"] == "gcc-1.17.1-1.el9.x86_64.rpm"
+
+
 def _setup_data_multiple_population_sources(pulp):
     ubi_repo = create_and_insert_repo(
         id="ubi_repo",

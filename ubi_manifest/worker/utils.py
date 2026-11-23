@@ -247,22 +247,24 @@ def keep_n_latest_rpms(rpms: list[UbiUnit], n: int = 1) -> None:
     # Use a queue of n elements per arch
     pkgs_per_arch: dict[str, Any] = defaultdict(lambda: deque(maxlen=n))
 
-    # set of allowed (version, release) tuples
-    allowed_ver_rel = set()
+    # set of allowed (epoch, version, release) tuples
+    allowed_evr = set()
     for rpm in sorted(rpms, key=vercmp_sort(), reverse=True):
-        allowed_ver_rel.add(
+        allowed_evr.add(
             (
+                rpm.epoch,
                 rpm.version,
                 rpm.release,
             )
         )
-        if len(allowed_ver_rel) > n:
+        if len(allowed_evr) > n:
             break
 
         if (
+            rpm.epoch,
             rpm.version,
             rpm.release,
-        ) in allowed_ver_rel:
+        ) in allowed_evr:
             pkgs_per_arch[rpm.arch].append(rpm)
 
     latest_pkgs_per_arch = list(chain.from_iterable(pkgs_per_arch.values()))

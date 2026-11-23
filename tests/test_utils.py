@@ -216,6 +216,37 @@ def test_keep_n_latest_rpms_multiple_arches_default_n_same_version():
     assert rpms[1].arch == "i686"
 
 
+def test_keep_n_latest_rpms_epoch_decides():
+    """Test keeping only the latest rpm when the pkgs share a version and
+    release, so epoch is the deciding factor."""
+
+    unit_1 = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="test",
+        version="1.17.1",
+        release="1.el9",
+        epoch="2",
+        arch="x86_64",
+    )
+    unit_2 = get_ubi_unit(
+        RpmUnit,
+        "test_repo_id",
+        name="test",
+        version="1.17.1",
+        release="1.el9",
+        epoch="3",
+        arch="x86_64",
+    )
+
+    rpms = [unit_1, unit_2]
+    keep_n_latest_rpms(rpms)
+
+    # only the rpm with the highest epoch is kept
+    assert len(rpms) == 1
+    assert rpms[0].epoch == "3"
+
+
 # test data setup for test_keep_n_latest_rpms_multiple_arches_different_n()
 def _testdata(n):
     unit_x86_64_lower = get_ubi_unit(
